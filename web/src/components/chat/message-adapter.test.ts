@@ -1,0 +1,489 @@
+import { describe, expect, it } from "vitest";
+import {
+  HermesUIMessage as HermesUIMessageSchema,
+  MessagesResponse,
+  type HermesUIMessage,
+  type SessionMessage,
+} from "@hermes/protocol";
+import {
+  deriveAssistantStats,
+  hermesUIMessageToChatMessage,
+  hermesUIMessagesToChatMessages,
+  legacySessionMessagesToHermesUIMessages,
+  mergeHermesUIMessages,
+  messagesResponseToHermesUIMessages,
+  storedMessageToChatMessage,
+  storedMessagesToChatMessages,
+} from "./message-adapter";
+
+function sessionMessage(overrides: Partial<SessionMessage>): SessionMessage {
+  return {
+    id: 1,
+    session_id: "s1",
+    role: "assistant",
+    content: null,
+    tool_call_id: null,
+    tool_calls: null,
+    tool_name: null,
+    timestamp: 100,
+    token_count: null,
+    finish_reason: null,
+    reasoning: null,
+    reasoning_details: null,
+    codex_reasoning_items: null,
+    reasoning_content: null,
+    ...overrides,
+  } as SessionMessage;
+}
+
+function toolCall(id: string, name: string, args: Record<string, unknown>) {
+  return {
+    id,
+    function: {
+      name,
+      arguments: JSON.stringify(args),
+    },
+  };
+}
+
+function uiMessage(overrides: Partial<HermesUIMessage> = {}): HermesUIMessage {
+  return {
+    id: "m1",
+    sessionId: "s1",
+    role: "assistant",
+    createdAt: 1_000,
+    status: "complete",
+    parts: [{ type: "text", text: "hi" }],
+    ...overrides,
+  };
+}
+
+describe("protocol schemas", () => {
+  it("validates canonical Hermes UI messages with text, reasoning, tool, notice, and metadata", () => {
+    const parsed = HermesUIMessageSchema.parse(uiMessage({
+      parts: [
+        { type: "reasoning", text: "plan" },
+        { type: "tool", toolCallId: "call-1", name: "read_file", state: "done", output: "ok" },
+        { type: "text", text: "done" },
+        { type: "notice", level: "warning", text: "quota low" },
+      ],
+      metadata: {
+        usage: { tokensInput: 10, tokensOutput: 20, tokensTotal: 30 },
+        timing: { startedAt: 100, firstTokenAt: 250, completedAt: 900 },
+        model: "gpt-5.4",
+        finishReason: "stop",
+        costUsd: 0.01,
+        costStatus: "estimated",
+        persistedId: 42,
+      },
+    }));
+
+    expect(parsed.parts.map((part) => part.type)).toEqual([
+      "reasoning",
+      "tool",
+      "text",
+      "notice",
+    ]);
+    expect(parsed.metadata?.persistedId).toBe(42);
+  });
+
+  it("keeps MessagesResponse compatible with legacy messages and optional ui_messages", () => {
+    const legacy = MessagesResponse.parse({
+      session_id: "s1",
+      messages: [sessionMessage({ id: 1, content: "legacy" })],
+    });
+    const canonical = MessagesResponse.parse({
+      session_id: "s1",
+      ui_messages: [uiMessage({ id: "ui-1" })],
+    });
+
+    expect(legacy.messages).toHaveLength(1);
+    expect(canonical.messages).toEqual([]);
+    expect(canonical.ui_messages?.[0]?.id).toBe("ui-1");
+  });
+});
+
+describe("message adapter", () => {
+  it("drops historical CLI spinner reasoning placeholders", () => {
+    const messages = storedMessagesToChatMessages([
+      sessionMessage({
+        id: 1,
+        content: "任务完成。",
+        reasoning_content: "ಠ_ಠ deliberating... (⌐■_■) contemplating...",
+      }),
+    ]);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      text: "任务完成。",
+      reasoning: undefined,
+    });
+    expect(messages[0]?.blocks?.map((block) => block.type)).toEqual(["text"]);
+  });
+
+  it("keeps historical real reasoning", () => {
+    const messages = storedMessagesToChatMessages([
+      sessionMessage({
+        id: 1,
+        content: "任务完成。",
+        reasoning_content: "我在检查上下文和约束。",
+      }),
+    ]);
+
+    expect(messages[0]).toMatchObject({
+      text: "任务完成。",
+      reasoning: "我在检查上下文和约束。",
+    });
+    expect(messages[0]?.blocks?.map((block) => block.type)).toEqual([
+      "text",
+      "reasoning",
+    ]);
+  });
+
+  it("prefers ui_messages over legacy messages in response adapters", () => {
+    const messages = messagesResponseToHermesUIMessages({
+      session_id: "s1",
+      messages: [sessionMessage({ id: 1, content: "legacy" })],
+      ui_messages: [
+        uiMessage({ id: "ui-1", parts: [{ type: "text", text: "canonical" }] }),
+      ],
+    });
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatchObject({
+      id: "ui-1",
+      parts: [{ type: "text", text: "canonical" }],
+    });
+  });
+
+  it("keeps canonical progress as a streaming progress block", () => {
+    const message = hermesUIMessageToChatMessage(uiMessage({
+      id: "live-assistant-1",
+      status: "streaming",
+      parts: [
+        { type: "progress", text: "ಠ_ಠ deliberating..." },
+      ],
+    }));
+
+    expect(message).toMatchObject({
+      text: undefined,
+      reasoning: undefined,
+      status: "streaming",
+    });
+    expect(message?.blocks).toEqual([{ type: "progress", text: "ಠ_ಠ deliberating..." }]);
+  });
+
+  it("merges historical tool call/result pairs into one compact assistant turn", () => {
+    const messages = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({
+        id: 1,
+        role: "user",
+        content: "配置搜索",
+        timestamp: 100,
+      }),
+      sessionMessage({
+        id: 2,
+        content: "我先检查配置。",
+        tool_calls: [toolCall("call-1", "search_files", { path: "~/.hermes" })],
+        timestamp: 101,
+      }),
+      sessionMessage({
+        id: 3,
+        role: "tool",
+        content: "found .env",
+        tool_call_id: "call-1",
+        tool_name: "search_files",
+        timestamp: 103.5,
+      }),
+      sessionMessage({
+        id: 4,
+        tool_calls: [toolCall("call-2", "terminal", { command: "cat ~/.hermes/.env" })],
+        timestamp: 104,
+      }),
+      sessionMessage({
+        id: 5,
+        role: "tool",
+        content: "TAVILY_API_KEY missing",
+        tool_call_id: "call-2",
+        tool_name: "terminal",
+        timestamp: 105.25,
+      }),
+      sessionMessage({
+        id: 6,
+        content: "需要补充环境变量。",
+        timestamp: 106,
+      }),
+    ]);
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({ role: "assistant" });
+    expect(messages[1]?.parts.map((part) => part.type)).toEqual([
+      "text",
+      "tool",
+      "tool",
+      "text",
+    ]);
+
+    const chat = hermesUIMessagesToChatMessages(messages);
+    expect(chat[1]?.tools).toEqual([
+      expect.objectContaining({
+        tool_id: "call-1",
+        status: "done",
+        summary: "found .env",
+        startedAt: 101_000,
+        completedAt: 103_500,
+      }),
+      expect.objectContaining({
+        tool_id: "call-2",
+        status: "done",
+        summary: "TAVILY_API_KEY missing",
+        startedAt: 104_000,
+        completedAt: 105_250,
+      }),
+    ]);
+  });
+
+  it("canonical conversion preserves stats, tool cards, reasoning, and copyable text blocks", () => {
+    const chat = hermesUIMessageToChatMessage(uiMessage({
+      id: "live-assistant-1",
+      parts: [
+        { type: "reasoning", text: "先分析。" },
+        { type: "tool", toolCallId: "read-1", name: "read_file", state: "done", input: { path: "app.tsx" }, output: "ok", startedAt: 100, completedAt: 300 },
+        { type: "text", text: "结论。" },
+      ],
+      metadata: {
+        usage: { tokensInput: 10, tokensOutput: 20, tokensTotal: 30 },
+        timing: { startedAt: 0, firstTokenAt: 100, completedAt: 1000 },
+        model: "gpt-5.4",
+        finishReason: "stop",
+      },
+    }));
+
+    expect(chat).toMatchObject({
+      id: "live-assistant-1",
+      reasoning: "先分析。",
+      text: "结论。",
+      stats: {
+        ttftMs: 100,
+        durationMs: 1000,
+        tokensTotal: 30,
+        tokensInput: 10,
+        tokensOutput: 20,
+        model: "gpt-5.4",
+        finishReason: "stop",
+      },
+    });
+    expect(chat?.blocks?.map((block) => block.type)).toEqual(["reasoning", "tool", "text"]);
+    expect(chat?.tools?.[0]).toMatchObject({
+      tool_id: "read-1",
+      name: "read_file",
+      status: "done",
+      context: "app.tsx",
+      summary: "ok",
+    });
+  });
+
+  it("prefers matching live canonical rows over stored rows to preserve stable ids and stats", () => {
+    const stored = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({
+        id: 1,
+        role: "user",
+        content: "你好",
+        timestamp: 100,
+      }),
+      sessionMessage({
+        id: 2,
+        role: "assistant",
+        content: "你好，有什么可以帮你？",
+        timestamp: 101,
+      }),
+    ]);
+    const live = [
+      uiMessage({
+        id: "live-user-1",
+        role: "user",
+        createdAt: 100_000,
+        parts: [{ type: "text", text: "你好" }],
+      }),
+      uiMessage({
+        id: "live-assistant-1",
+        createdAt: 101_000,
+        parts: [{ type: "text", text: "你好，有什么可以帮你？" }],
+        metadata: {
+          usage: { tokensInput: 10, tokensOutput: 20, tokensTotal: 30 },
+          timing: { startedAt: 100_000, firstTokenAt: 100_200, completedAt: 101_000 },
+        },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    expect(merged.map((message) => message.id)).toEqual([
+      "live-user-1",
+      "live-assistant-1",
+    ]);
+    expect(chat[1]?.stats).toMatchObject({
+      ttftMs: 200,
+      durationMs: 1_000,
+      tokensTotal: 30,
+    });
+  });
+
+  it("does not duplicate a stored refetch that matches a live assistant response", () => {
+    const stored = legacySessionMessagesToHermesUIMessages([
+      sessionMessage({ id: 1, role: "assistant", content: "完成", timestamp: 100 }),
+    ]);
+    const live = [
+      uiMessage({
+        id: "live-assistant-10",
+        parts: [{ type: "text", text: "完成" }],
+        metadata: {
+          usage: { tokensOutput: 5 },
+          timing: { startedAt: 0, firstTokenAt: 1, completedAt: 10 },
+        },
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("live-assistant-10");
+  });
+});
+
+describe("assistant stats derivation", () => {
+  it("derives full stats when metadata usage and timing are present", () => {
+    const stats = deriveAssistantStats(
+      uiMessage({
+        metadata: {
+          timing: {
+            startedAt: 1_000,
+            firstTokenAt: 1_420,
+            completedAt: 5_200,
+          },
+          usage: {
+            tokensInput: 920,
+            tokensOutput: 312,
+            tokensTotal: 1232,
+            cacheRead: 736,
+            cacheWrite: 12,
+            apiCalls: 3,
+          },
+          model: "gpt-5.4",
+          costUsd: 0.018,
+          costStatus: "ok",
+          finishReason: "stop",
+        },
+      }),
+    );
+
+    expect(stats).toMatchObject({
+      ttftMs: 420,
+      durationMs: 4200,
+      tokensTotal: 1232,
+      tokensInput: 920,
+      tokensOutput: 312,
+      cacheRead: 736,
+      cacheWrite: 12,
+      apiCalls: 3,
+      model: "gpt-5.4",
+      costUsd: 0.018,
+      finishReason: "stop",
+    });
+    expect(stats?.tokPerSec).toBeCloseTo(312 / 4.2, 2);
+  });
+
+  it("keeps metadata costUsd for displayable statuses", () => {
+    const estimated = deriveAssistantStats(
+      uiMessage({
+        metadata: {
+          usage: { tokensOutput: 50 },
+          costUsd: 0.5,
+          costStatus: "estimated",
+        },
+      }),
+    );
+    const included = deriveAssistantStats(
+      uiMessage({
+        metadata: {
+          usage: { tokensOutput: 50 },
+          costUsd: 0.2,
+          costStatus: "included",
+        },
+      }),
+    );
+
+    expect(estimated?.costUsd).toBe(0.5);
+    expect(included?.costUsd).toBe(0.2);
+  });
+
+  it("omits costUsd when costStatus is explicitly stale or unknown", () => {
+    const stats = deriveAssistantStats(
+      uiMessage({
+        metadata: {
+          timing: { startedAt: 1_000, firstTokenAt: 1_100, completedAt: 2_000 },
+          usage: { tokensOutput: 50 },
+          costUsd: 0.5,
+          costStatus: "stale_pricing",
+        },
+      }),
+    );
+    expect(stats?.costUsd).toBeUndefined();
+  });
+
+  it("falls back gracefully when first token never recorded", () => {
+    const stats = deriveAssistantStats(
+      uiMessage({
+        metadata: {
+          timing: { startedAt: 1_000, completedAt: 3_500 },
+          usage: { tokensInput: 100, tokensOutput: 200 },
+        },
+      }),
+    );
+    expect(stats?.ttftMs).toBeUndefined();
+    expect(stats?.durationMs).toBe(2_500);
+    expect(stats?.tokPerSec).toBeCloseTo(200 / 2.5, 2);
+  });
+
+  it("returns undefined for non-assistant roles", () => {
+    expect(
+      deriveAssistantStats(uiMessage({
+        role: "user",
+        parts: [{ type: "text", text: "hi" }],
+        metadata: { usage: { tokensInput: 10 } },
+      })),
+    ).toBeUndefined();
+  });
+
+  it("returns undefined when neither usage nor timing exists", () => {
+    expect(deriveAssistantStats(uiMessage())).toBeUndefined();
+  });
+
+  it("attaches stats on canonical assistant messages", () => {
+    const chat = hermesUIMessageToChatMessage(uiMessage({
+      metadata: {
+        timing: { startedAt: 0, firstTokenAt: 200, completedAt: 1_000 },
+        usage: { tokensInput: 10, tokensOutput: 20, tokensTotal: 30 },
+      },
+    }));
+    expect(chat?.stats).toMatchObject({
+      ttftMs: 200,
+      durationMs: 1_000,
+      tokensTotal: 30,
+    });
+  });
+
+  it("carries legacy token_count into basic stored stats", () => {
+    const stored = storedMessageToChatMessage(
+      sessionMessage({
+        id: 9,
+        role: "assistant",
+        content: "old reply",
+        timestamp: 100,
+        token_count: 42,
+      }),
+    );
+    expect(stored?.stats).toMatchObject({ tokensTotal: 42 });
+  });
+});

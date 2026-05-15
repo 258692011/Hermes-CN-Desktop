@@ -1,0 +1,53 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchJSON, putJSON } from "@/lib/transport";
+import { invalidateModelOptionsCache } from "@/lib/model-options-cache";
+import { useActiveProfileName } from "@/hooks/use-profiles";
+import {
+  ConfigResponse,
+  ConfigSchemaResponse,
+  ConfigUpdateRequest,
+  ModelInfo,
+  MutationOkResponse,
+} from "@hermes/protocol";
+
+export function buildConfigUpdateRequest(config: Record<string, any>): ConfigUpdateRequest {
+  return ConfigUpdateRequest.parse({ config });
+}
+
+export function useConfig() {
+  const profile = useActiveProfileName();
+  return useQuery<Record<string, any>>({
+    queryKey: ["config", profile],
+    queryFn: () => fetchJSON("/api/config", undefined, ConfigResponse),
+  });
+}
+
+export function useConfigSchema() {
+  // schema 是上游 hermes-agent 代码里的 dataclass，与具体 profile 无关
+  return useQuery<ConfigSchemaResponse>({
+    queryKey: ["config-schema"],
+    queryFn: () => fetchJSON("/api/config/schema", undefined, ConfigSchemaResponse),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useModelInfo() {
+  const profile = useActiveProfileName();
+  return useQuery<ModelInfo>({
+    queryKey: ["model-info", profile],
+    queryFn: () => fetchJSON("/api/model/info", undefined, ModelInfo),
+  });
+}
+
+export function useSaveConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: Record<string, any>) =>
+      putJSON("/api/config", buildConfigUpdateRequest(config), MutationOkResponse),
+    onSuccess: () => {
+      invalidateModelOptionsCache();
+      qc.invalidateQueries({ queryKey: ["config"] });
+      qc.invalidateQueries({ queryKey: ["model-info"] });
+    },
+  });
+}

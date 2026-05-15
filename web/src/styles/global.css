@@ -1,0 +1,83 @@
+@import "@hermes/shared-ui/src/tokens/index.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+html {
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--h-font-cn);
+  font-size: var(--h-fs);
+  line-height: var(--h-lh);
+  background: var(--h-bg-app);
+  color: var(--h-text);
+  text-spacing-trim: trim-start;
+  text-autospace: ideograph-alpha ideograph-numeric;
+  line-break: strict;
+  hanging-punctuation: first allow-end last;
+  font-kerning: normal;
+  font-variant-east-asian: proportional-width;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:where(p, li, blockquote, dd, dt) {
+  text-spacing-trim: trim-start;
+  text-autospace: ideograph-alpha ideograph-numeric;
+  line-break: strict;
+  hanging-punctuation: first allow-end last;
+}
+
+input,
+textarea,
+button,
+select {
+  font-family: inherit;
+}
+
+:where(button, [role="button"], [data-ui-no-select="true"]) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+:where(input, textarea, select, [contenteditable="true"]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+body[data-hermes-window-type="electron"] [data-window-drag] {
+  -webkit-app-region: drag;
+}
+
+body[data-hermes-window-type="electron"] :where(button, input, textarea, select, a, [role="button"]) {
+  -webkit-app-region: no-drag;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--h-line);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--h-text-3);
+}

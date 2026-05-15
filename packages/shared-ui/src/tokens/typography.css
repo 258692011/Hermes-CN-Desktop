@@ -1,0 +1,45 @@
+/* Hermes Design Tokens — Typography */
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src:
+    local("HarmonyOS Sans SC"),
+    local("HarmonyOS Sans");
+  unicode-range:
+    U+2E80-2EFF,
+    U+3000-303F,
+    U+31C0-31EF,
+    U+3400-4DBF,
+    U+4E00-9FFF,
+    U+F900-FAFF,
+    U+FF00-FFEF;
+}
+
+@font-face {
+  font-family: "HarmonyOS Sans SC";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src:
+    local("HarmonyOS Sans SC"),
+    local("HarmonyOS Sans");
+  unicode-range:
+    U+0000-00FF,
+    U+0100-024F,
+    U+2000-206F,
+    U+20A0-20CF,
+    U+2100-214F,
+    U+2190-22FF;
+}
+
+:root {
+  --h-font-cn: "HarmonyOS Sans SC", "HarmonyOS Sans", "PingFang SC",
+    "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+  --h-font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
+    Consolas, monospace;
+  --h-font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    Georgia, "Times New Roman", serif;
+}

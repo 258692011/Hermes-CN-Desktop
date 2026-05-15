@@ -1,0 +1,171 @@
+import { LogsResponse } from "@hermes/protocol";
+import { debugBus, type DebugEntryLevel } from "./debug-bus";
+import { getGatewayClient } from "./gateway-client";
+import { fetchJSON } from "./transport";
+
+let installed = false;
+let logTailInstalled = false;
+
+const LOG_TAIL_FILES = ["errors", "agent", "gateway"] as const;
+const LOG_TAIL_INTERVAL_MS = 3000;
+const LOG_TAIL_LINES = 50;
+const lastSeenLogLine: Partial<Record<string, string>> = {};
+
+function classifyLogLine(line: string): DebugEntryLevel {
+  const upper = line.toUpperCase();
+  if (upper.includes("ERROR") || upper.includes("CRITICAL") || upper.includes("FATAL")) return "error";
+  if (upper.includes("WARNING") || upper.includes("WARN")) return "warn";
+  return "info";
+}
+
+async function pollBackendLogFile(file: string): Promise<void> {
+  let data: { file: string; lines: string[] };
+  try {
+    const params = new URLSearchParams({ file, lines: String(LOG_TAIL_LINES) });
+    data = await fetchJSON(`/api/logs?${params.toString()}`, undefined, LogsResponse);
+  } catch {
+    return;
+  }
+  const lines = (data.lines ?? [])
+    .map((line) => line.replace(/\s+$/u, ""))
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return;
+
+  const previous = lastSeenLogLine[file];
+  const last = lines[lines.length - 1]!;
+
+  let toPush: string[];
+  if (previous === undefined) {
+    toPush = [];
+  } else {
+    const idx = lines.lastIndexOf(previous);
+    toPush = idx >= 0 ? lines.slice(idx + 1) : lines;
+  }
+  lastSeenLogLine[file] = last;
+
+  for (const line of toPush) {
+    debugBus.push({
+      type: "backend",
+      level: classifyLogLine(line),
+      summary: `[${file}] ${line.slice(0, 280)}`,
+      payload: { file, line },
+    });
+  }
+}
+
+function startBackendLogTail(): void {
+  if (logTailInstalled) return;
+  logTailInstalled = true;
+
+  const tick = async () => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    await Promise.all(LOG_TAIL_FILES.map(pollBackendLogFile));
+  };
+
+  setTimeout(() => void tick(), 1500);
+  setInterval(() => void tick(), LOG_TAIL_INTERVAL_MS);
+}
+
+function summarizeArgs(args: unknown[]): string {
+  return args
+    .map((arg) => {
+      if (arg === null) return "null";
+      if (arg === undefined) return "undefined";
+      if (typeof arg === "string") return arg;
+      if (arg instanceof Error) return `${arg.name}: ${arg.message}`;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    })
+    .join(" ");
+}
+
+export function installDebugCapture(): void {
+  if (installed) return;
+  // Skip in vitest / jsdom — patching console.error/warn breaks vi.spyOn(console, "error")
+  // assertions used by other tests, and gateway/log polling are pointless without a server.
+  if (typeof import.meta !== "undefined" && (import.meta as any).env?.MODE === "test") return;
+  installed = true;
+
+  // 1. Gateway events
+  try {
+    getGatewayClient().onAny((event) => {
+      const eventType = typeof event.type === "string" ? event.type : "unknown";
+      const payloadObj = event.payload && typeof event.payload === "object"
+        ? event.payload as Record<string, unknown>
+        : {};
+      const isError =
+        eventType === "error" ||
+        eventType === "gateway.disconnected" ||
+        payloadObj.status === "error";
+      debugBus.push({
+        type: "gateway",
+        level: isError ? "error" : "info",
+        summary: eventType + (event.session_id ? ` · sid=${String(event.session_id).slice(0, 8)}` : ""),
+        payload: event,
+      });
+    });
+  } catch {
+    // gateway client may not be ready yet; OK to skip
+  }
+
+  // 2. Console intercept (errors and warnings only)
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  console.error = (...args: unknown[]) => {
+    debugBus.push({
+      type: "console",
+      level: "error",
+      summary: summarizeArgs(args).slice(0, 500),
+      payload: args.length === 1 ? args[0] : args,
+    });
+    originalError.apply(console, args);
+  };
+  console.warn = (...args: unknown[]) => {
+    debugBus.push({
+      type: "console",
+      level: "warn",
+      summary: summarizeArgs(args).slice(0, 500),
+      payload: args.length === 1 ? args[0] : args,
+    });
+    originalWarn.apply(console, args);
+  };
+
+  // 3. Window-level errors
+  if (typeof window !== "undefined") {
+    window.addEventListener("error", (event) => {
+      debugBus.push({
+        type: "exception",
+        level: "error",
+        summary: event.message || String(event.error ?? "Uncaught error"),
+        payload: {
+          message: event.message,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          stack: event.error instanceof Error ? event.error.stack : undefined,
+        },
+      });
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+      const reason = event.reason;
+      debugBus.push({
+        type: "exception",
+        level: "error",
+        summary:
+          reason instanceof Error
+            ? `Unhandled rejection: ${reason.message}`
+            : `Unhandled rejection: ${summarizeArgs([reason]).slice(0, 200)}`,
+        payload: reason instanceof Error
+          ? { message: reason.message, stack: reason.stack }
+          : reason,
+      });
+    });
+  }
+
+  // 4. Backend log tail (~/.hermes/logs/{errors,agent,gateway}.log)
+  startBackendLogTail();
+}

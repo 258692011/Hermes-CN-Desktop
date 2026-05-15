@@ -1,0 +1,643 @@
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
+import { useDeleteEnv, useEnvVars, useRevealEnv, useSetEnv } from "@/hooks/use-env";
+import { useProviderModels } from "@/hooks/use-provider-models";
+import {
+  BUILTIN_PROVIDER_CATALOG,
+  buildProviderConfigUpdate,
+  fetchRemoteProviderCatalog,
+  getProviderEntry,
+  mergeProviderCatalog,
+  providerHasSavedCredentials,
+  sortProvidersForCnEdition,
+  TOP5_PROVIDER_IDS,
+  type ProviderCatalog,
+  type ProviderPreset,
+} from "@/lib/provider-catalog";
+import { ModelCombobox } from "@/components/settings/model-combobox";
+import type { EnvVarInfo } from "@hermes/protocol";
+import { OAuthProvidersSection } from "./settings-oauth-section";
+import s from "./settings.module.css";
+
+const PROVIDER_GROUPS: { prefix: string; name: string; priority: number }[] = [
+  { prefix: "NOUS_", name: "Nous Portal", priority: 0 },
+  { prefix: "ANTHROPIC_", name: "Anthropic", priority: 1 },
+  { prefix: "DASHSCOPE_", name: "DashScope (Qwen)", priority: 2 },
+  { prefix: "HERMES_QWEN_", name: "DashScope (Qwen)", priority: 2 },
+  { prefix: "DEEPSEEK_", name: "DeepSeek", priority: 3 },
+  { prefix: "GOOGLE_", name: "Gemini", priority: 4 },
+  { prefix: "GEMINI_", name: "Gemini", priority: 4 },
+  { prefix: "GLM_", name: "GLM / Z.AI", priority: 5 },
+  { prefix: "ZAI_", name: "GLM / Z.AI", priority: 5 },
+  { prefix: "Z_AI_", name: "GLM / Z.AI", priority: 5 },
+  { prefix: "HF_", name: "Hugging Face", priority: 6 },
+  { prefix: "KIMI_", name: "Kimi / Moonshot", priority: 7 },
+  { prefix: "MINIMAX_CN_", name: "MiniMax (China)", priority: 9 },
+  { prefix: "MINIMAX_", name: "MiniMax", priority: 8 },
+  { prefix: "OPENCODE_GO_", name: "OpenCode Go", priority: 10 },
+  { prefix: "OPENCODE_ZEN_", name: "OpenCode Zen", priority: 11 },
+  { prefix: "OPENROUTER_", name: "OpenRouter", priority: 12 },
+  { prefix: "XIAOMI_", name: "Xiaomi MiMo", priority: 13 },
+  { prefix: "COMPSHARE_", name: "优云智算 (Compshare)", priority: 14 },
+];
+
+function getProviderGroup(key: string): string {
+  for (const g of PROVIDER_GROUPS) {
+    if (key.startsWith(g.prefix)) return g.name;
+  }
+  return "其他";
+}
+
+function getProviderPriority(name: string): number {
+  return PROVIDER_GROUPS.find((g) => g.name === name)?.priority ?? 99;
+}
+
+export function ModelsSection() {
+  const { data: envVars, isLoading } = useEnvVars();
+  const { data: config, isLoading: configLoading } = useConfig();
+  const { data: modelInfo } = useModelInfo();
+  const saveConfig = useSaveConfig();
+  const setEnv = useSetEnv();
+  const deleteEnv = useDeleteEnv();
+  const revealEnv = useRevealEnv();
+  const [catalog, setCatalog] = useState<ProviderCatalog>(BUILTIN_PROVIDER_CATALOG);
+  const [catalogMessage, setCatalogMessage] = useState("");
+  const initialProvider =
+    BUILTIN_PROVIDER_CATALOG.providers.find((p) => p.id === TOP5_PROVIDER_IDS[0]) ??
+    BUILTIN_PROVIDER_CATALOG.providers[0];
+  const [selectedProviderId, setSelectedProviderId] = useState(initialProvider?.id ?? "");
+  const [providerForm, setProviderForm] = useState({
+    apiKey: "",
+    baseUrl: initialProvider?.baseUrl ?? "",
+    model: initialProvider?.defaultModel ?? "",
+  });
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [editVal, setEditVal] = useState("");
+  const [revealedValues, setRevealedValues] = useState<Record<string, string>>({});
+  const [showEnvAdvanced, setShowEnvAdvanced] = useState(false);
+  const [providerSearch, setProviderSearch] = useState("");
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customForm, setCustomForm] = useState({
+    name: "",
+    baseUrl: "",
+    apiKey: "",
+    model: "",
+  });
+  const customDialogTitleId = useId();
+  const closeCustomForm = useCallback(() => {
+    setShowCustomForm(false);
+    setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+  }, []);
+  useEffect(() => {
+    if (!showCustomForm) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeCustomForm();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showCustomForm, closeCustomForm]);
+
+  const customProviders = useMemo<ProviderPreset[]>(() => {
+    const providers = config && typeof config === "object" && !Array.isArray(config)
+      ? (config as Record<string, any>).providers
+      : null;
+    if (!providers || typeof providers !== "object") return [];
+    const knownIds = new Set(catalog.providers.map((p) => p.id));
+    const customs: ProviderPreset[] = [];
+    for (const [id, raw] of Object.entries(providers)) {
+      if (knownIds.has(id) || !id.startsWith("custom:")) continue;
+      const v = raw && typeof raw === "object" ? raw as Record<string, any> : {};
+      const model = typeof v.model === "string" ? v.model : "";
+      customs.push({
+        id,
+        name: typeof v.name === "string" && v.name ? v.name : id.replace(/^custom:/, ""),
+        vendor: "自定义",
+        region: "cn",
+        baseUrl: typeof v.base_url === "string" ? v.base_url : "",
+        apiMode: v.api_mode === "anthropic_messages" || v.api_mode === "codex_responses"
+          ? v.api_mode : "chat_completions",
+        transport: v.transport === "anthropic_messages" || v.transport === "codex_responses"
+          ? v.transport : "openai_chat",
+        apiKeyLabel: "API Key",
+        defaultModel: model,
+        models: model ? [{ id: model, supportsTools: true }] : [],
+        isCustom: true,
+      });
+    }
+    return customs;
+  }, [config, catalog.providers]);
+
+  const allProviders = useMemo(
+    () => [...catalog.providers, ...customProviders],
+    [catalog.providers, customProviders],
+  );
+  const selectedProvider = useMemo<ProviderPreset | undefined>(
+    () => allProviders.find((provider) => provider.id === selectedProviderId) ?? allProviders[0],
+    [allProviders, selectedProviderId],
+  );
+  const orderedProviders = useMemo(
+    () => sortProvidersForCnEdition(allProviders),
+    [allProviders],
+  );
+  const filteredProviders = useMemo(() => {
+    const query = providerSearch.trim().toLowerCase();
+    if (!query) return orderedProviders;
+    return orderedProviders.filter((provider) => {
+      const searchable = [
+        provider.name,
+        provider.vendor,
+        provider.id,
+        provider.defaultModel,
+        ...provider.models.map((model) => model.label ?? model.id),
+      ].join(" ").toLowerCase();
+      return searchable.includes(query);
+    });
+  }, [orderedProviders, providerSearch]);
+  const selectedProviderEntry = selectedProvider
+    ? getProviderEntry(config, selectedProvider.id)
+    : {};
+  const selectedHasCredentials = selectedProvider
+    ? providerHasSavedCredentials(config, selectedProvider.id)
+    : false;
+  const currentProviderId = modelInfo?.provider ||
+    (config?.model && typeof config.model === "object" && !Array.isArray(config.model)
+      ? String((config.model as Record<string, unknown>).provider ?? "")
+      : "");
+  const configuredCount = useMemo(
+    () => allProviders.filter((provider) => providerHasSavedCredentials(config, provider.id)).length,
+    [allProviders, config],
+  );
+  const providerEnvEntries = useMemo(
+    () => Object.entries(envVars ?? {})
+      .filter(([, v]) => v.category === "provider")
+      .sort(([aKey], [bKey]) => getProviderPriority(getProviderGroup(aKey)) - getProviderPriority(getProviderGroup(bKey))),
+    [envVars],
+  );
+  const nonProviderGroups = useMemo(() => {
+    if (!envVars) return [];
+    const catLabels: Record<string, string> = { tool: "工具密钥", messaging: "消息平台", setting: "设置", service: "服务" };
+    return ["tool", "messaging", "setting", "service"]
+      .map((cat) => ({
+        category: cat,
+        label: catLabels[cat] ?? cat,
+        entries: Object.entries(envVars).filter(([, v]) => v.category === cat && !v.advanced),
+      }))
+      .filter((g) => g.entries.length > 0);
+  }, [envVars]);
+
+  const liveApiKey = providerForm.apiKey.trim() ||
+    (typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
+  const supportsModelListing = selectedProvider?.supportsModelListing !== false;
+  const modelsQuery = useProviderModels(providerForm.baseUrl, liveApiKey || undefined);
+  const liveModelIds = supportsModelListing ? modelsQuery.data?.models ?? [] : [];
+  const mergedModelOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const id of liveModelIds) set.add(id);
+    if (selectedProvider) for (const m of selectedProvider.models) set.add(m.id);
+    if (providerForm.model) set.add(providerForm.model);
+    return Array.from(set);
+  }, [liveModelIds, selectedProvider, providerForm.model]);
+
+  const refreshLabel = modelsQuery.isFetching
+    ? "刷新中…"
+    : modelsQuery.isError
+      ? "刷新失败 重试"
+      : modelsQuery.data
+        ? `已加载 ${modelsQuery.data.models.length} 个`
+        : "刷新模型列表";
+
+  const refreshErrorText = useMemo(() => {
+    if (!supportsModelListing || !modelsQuery.isError) return "";
+    const msg = modelsQuery.error instanceof Error ? modelsQuery.error.message : String(modelsQuery.error);
+    if (/\b404\b|not found/i.test(msg)) return "此服务商未提供 /models 端点";
+    if (/\b401\b|\b403\b|unauthor/i.test(msg)) return "API Key 无效或未保存";
+    if (/Failed to fetch|NetworkError|TypeError|cors/i.test(msg)) {
+      return "无法连接，可能被浏览器跨域策略拦截；桌面端可正常使用";
+    }
+    return msg;
+  }, [supportsModelListing, modelsQuery.isError, modelsQuery.error]);
+
+  useEffect(() => {
+    if (!selectedProvider) return;
+    const model = typeof selectedProviderEntry.model === "string"
+      ? selectedProviderEntry.model
+      : selectedProvider.defaultModel;
+    const baseUrl = typeof selectedProviderEntry.base_url === "string"
+      ? selectedProviderEntry.base_url
+      : selectedProvider.baseUrl;
+    setProviderForm({ apiKey: "", baseUrl, model });
+  }, [
+    selectedProvider,
+    selectedProviderEntry.base_url,
+    selectedProviderEntry.model,
+  ]);
+
+  const handleReveal = async (key: string) => {
+    if (revealedValues[key]) {
+      setRevealedValues((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      return;
+    }
+    const result = await revealEnv.mutateAsync(key);
+    setRevealedValues((prev) => ({ ...prev, [key]: result.value }));
+  };
+
+  const handleSave = (key: string) => {
+    setEnv.mutate({ key, value: editVal });
+    setEditKey(null);
+    setEditVal("");
+  };
+
+  const handleCatalogRefresh = async () => {
+    const url = import.meta.env.VITE_HERMES_PROVIDER_CATALOG_URL;
+    if (!url) {
+      setCatalog(BUILTIN_PROVIDER_CATALOG);
+      setCatalogMessage(`当前使用内置预设 ${BUILTIN_PROVIDER_CATALOG.version}`);
+      return;
+    }
+
+    try {
+      const remote = await fetchRemoteProviderCatalog(url);
+      setCatalog(mergeProviderCatalog(BUILTIN_PROVIDER_CATALOG, remote));
+      setCatalogMessage(`已刷新预设 ${remote.version}`);
+    } catch (error) {
+      setCatalog(BUILTIN_PROVIDER_CATALOG);
+      setCatalogMessage(error instanceof Error ? error.message : "刷新失败，已回退内置预设");
+    }
+  };
+
+  const handleProviderSave = () => {
+    if (!config || !selectedProvider) return;
+    saveConfig.mutate(
+      buildProviderConfigUpdate(config, selectedProvider, providerForm),
+      {
+        onSuccess: () => {
+          setProviderForm((prev) => ({ ...prev, apiKey: "" }));
+        },
+      },
+    );
+  };
+
+  const handleAddCustom = () => {
+    if (!config) return;
+    const name = customForm.name.trim();
+    const baseUrl = customForm.baseUrl.trim();
+    const model = customForm.model.trim();
+    const apiKey = customForm.apiKey.trim();
+    if (!name || !baseUrl || !model) return;
+    const host = baseUrl.match(/https?:\/\/([^/]+)/)?.[1] ?? "endpoint";
+    const slug = host.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/(^-|-$)/g, "");
+    const existingIds = new Set(allProviders.map((p) => p.id));
+    let candidate = `custom:${slug || "endpoint"}`;
+    let suffix = 2;
+    while (existingIds.has(candidate)) {
+      candidate = `custom:${slug || "endpoint"}-${suffix++}`;
+    }
+    const preset: ProviderPreset = {
+      id: candidate,
+      name,
+      vendor: "自定义",
+      region: "cn",
+      baseUrl,
+      apiMode: "chat_completions",
+      transport: "openai_chat",
+      apiKeyLabel: "API Key",
+      defaultModel: model,
+      models: [{ id: model, supportsTools: true }],
+      isCustom: true,
+    };
+    saveConfig.mutate(
+      buildProviderConfigUpdate(config, preset, { apiKey, baseUrl, model }),
+      {
+        onSuccess: () => {
+          setSelectedProviderId(candidate);
+          setShowCustomForm(false);
+          setCustomForm({ name: "", baseUrl: "", apiKey: "", model: "" });
+          setProviderForm({ apiKey: "", baseUrl, model });
+        },
+      },
+    );
+  };
+
+  const envRowProps = (key: string, info: EnvVarInfo) => ({
+    envKey: key,
+    info,
+    revealedValue: revealedValues[key],
+    isEditing: editKey === key,
+    editVal,
+    onEdit: () => { setEditKey(key); setEditVal(""); },
+    onEditChange: setEditVal,
+    onSave: () => handleSave(key),
+    onCancel: () => setEditKey(null),
+    onReveal: () => handleReveal(key),
+    onDelete: () => deleteEnv.mutate(key),
+  });
+
+  if (isLoading || configLoading) return <div className={s.desc}>加载中…</div>;
+  if (!envVars || !config) return null;
+
+  return (
+    <div className={s.modelsSettings}>
+      <div className={s.modelsSectionHeader}>
+        <div>
+          <p className={s.desc}>
+            管理国内模型服务商预设和 API Key。
+            {modelInfo && <> 当前模型: <b>{modelInfo.model}</b> ({modelInfo.provider})</>}
+            {" · "}{configuredCount}/{catalog.providers.length} 个预设已配置
+          </p>
+        </div>
+        <div className={s.catalogMeta}>
+          <span>Provider Catalog {catalog.version}</span>
+          {catalogMessage && <span className={s.catalogMessage}>{catalogMessage}</span>}
+        </div>
+      </div>
+
+      <div className={s.providerPresetLayout}>
+        <div className={s.providerPresetListPane}>
+          <div className={s.providerListToolbar}>
+            <input
+              className={s.providerSearchInput}
+              value={providerSearch}
+              onChange={(event) => setProviderSearch(event.target.value)}
+              placeholder="搜索模型平台..."
+            />
+            <button
+              className={s.btn}
+              onClick={() => setShowCustomForm(true)}
+              title="添加自定义 OpenAI 兼容 provider"
+            >
+              + 自定义
+            </button>
+            <button className={s.btn} onClick={handleCatalogRefresh}>刷新预设</button>
+          </div>
+          <div className={s.providerPresetList}>
+            {filteredProviders.map((provider) => {
+              const configured = providerHasSavedCredentials(config, provider.id);
+              const current = currentProviderId === provider.id;
+              return (
+                <button
+                  key={provider.id}
+                  className={s.providerPresetItem}
+                  data-active={selectedProvider?.id === provider.id}
+                  onClick={() => setSelectedProviderId(provider.id)}
+                >
+                  <span className={s.providerPresetName}>{provider.name}</span>
+                  <span className={s.providerPresetVendor}>{provider.vendor}</span>
+                  <span className={s.providerPresetBadges}>
+                    {current && <span className={s.statusBadge} data-on="true">当前</span>}
+                    <span className={s.statusBadge} data-on={configured}>
+                      {configured ? "已设置" : "未设置"}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            {filteredProviders.length === 0 && (
+              <div className={s.providerPresetEmpty}>没有匹配的模型平台</div>
+            )}
+          </div>
+        </div>
+
+        {selectedProvider && (
+          <div className={s.providerPresetPanel}>
+            <div className={s.providerPresetHeader}>
+              <div>
+                <div className={s.providerDetailName}>{selectedProvider.name}</div>
+                <div className={s.providerDetailVendor}>
+                  {selectedProvider.id} · {selectedProvider.vendor}
+                  {selectedProvider.docsUrl && <> · <a href={selectedProvider.docsUrl} target="_blank" rel="noreferrer" className={s.link}>文档 ↗</a></>}
+                </div>
+              </div>
+              <span className={s.statusBadge} data-on={selectedHasCredentials}>
+                {selectedHasCredentials ? "已保存密钥" : "未设置"}
+              </span>
+            </div>
+
+            <div className={s.providerFormGrid}>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>{selectedProvider.apiKeyLabel}</div>
+                <input
+                  className={s.fieldInput}
+                  data-mono="true"
+                  type="password"
+                  value={providerForm.apiKey}
+                  placeholder={selectedHasCredentials ? "已保存" : "粘贴 API Key"}
+                  onChange={(event) => setProviderForm((prev) => ({ ...prev, apiKey: event.target.value }))}
+                />
+              </label>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>Base URL</div>
+                <input
+                  className={s.fieldInput}
+                  data-mono="true"
+                  value={providerForm.baseUrl}
+                  onChange={(event) => setProviderForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                />
+              </label>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>模型</div>
+                <div className={s.modelPickerRow}>
+                  <ModelCombobox
+                    value={providerForm.model}
+                    onChange={(next) => setProviderForm((prev) => ({ ...prev, model: next }))}
+                    options={mergedModelOptions}
+                  />
+                  {supportsModelListing ? (
+                    <button
+                      type="button"
+                      className={s.btn}
+                      disabled={modelsQuery.isFetching}
+                      onClick={() => modelsQuery.refetch()}
+                      title={`从 ${providerForm.baseUrl}/models 拉取`}
+                    >
+                      {refreshLabel}
+                    </button>
+                  ) : null}
+                </div>
+              </label>
+              {!supportsModelListing && (
+                <div className={s.modelPickerHint}>此服务商不提供 /models 端点，使用预设模型或手动输入即可</div>
+              )}
+              {refreshErrorText && (
+                <div className={s.modelPickerError}>{refreshErrorText}</div>
+              )}
+            </div>
+
+            <div className={s.modelTags}>
+              {mergedModelOptions.slice(0, 8).map((id) => (
+                <span key={id} className={s.modelTag}>{id}</span>
+              ))}
+            </div>
+
+            <div className={s.providerActions}>
+              <button
+                className={s.btnPrimary}
+                disabled={saveConfig.isPending || (!selectedHasCredentials && !providerForm.apiKey.trim())}
+                onClick={handleProviderSave}
+              >
+                {saveConfig.isPending ? "保存中…" : "保存并设为当前模型"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <OAuthProvidersSection />
+
+      <div className={s.advancedEnvBlock}>
+        <button className={s.providerCardHeader} onClick={() => setShowEnvAdvanced((prev) => !prev)}>
+          <span className={s.providerCardName}>
+            <span className={s.providerCardArrow}>{showEnvAdvanced ? "▾" : "▸"}</span>
+            高级环境变量
+          </span>
+          <span className={s.providerCardCount}>{providerEnvEntries.length} 项</span>
+        </button>
+        {showEnvAdvanced && (
+          <div className={s.providerCardBody}>
+            {providerEnvEntries.map(([key, info]) => (
+              <EnvRow key={key} {...envRowProps(key, info)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {nonProviderGroups.map((group) => (
+        <div key={group.category} style={{ marginTop: 24 }}>
+          <div className={s.modelsLabel}>{group.label} ({group.entries.length})</div>
+          {group.entries.map(([key, info]) => (
+            <EnvRow key={key} {...envRowProps(key, info)} />
+          ))}
+        </div>
+      ))}
+
+      {showCustomForm && createPortal(
+        <div className={s.customProviderBackdrop} onClick={closeCustomForm}>
+          <div
+            className={s.customProviderModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={customDialogTitleId}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={s.customProviderTitleBar}>
+              <h2 id={customDialogTitleId}>添加自定义 Provider</h2>
+              <button
+                type="button"
+                className={s.customProviderClose}
+                onClick={closeCustomForm}
+                aria-label="关闭"
+              >
+                ×
+              </button>
+            </div>
+            <div className={s.customProviderBody}>
+              <p className={s.customProviderHint}>
+                添加任意 OpenAI Chat Completions 兼容服务（百度千帆 / 腾讯混元 / SiliconFlow / 私有部署等）。提交后可在左侧列表里随时切换。
+              </p>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>名称</div>
+                <input
+                  className={s.fieldInput}
+                  value={customForm.name}
+                  placeholder="例如：腾讯混元"
+                  autoFocus
+                  onChange={(e) => setCustomForm((p) => ({ ...p, name: e.target.value }))}
+                />
+              </label>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>Base URL</div>
+                <input
+                  className={s.fieldInput}
+                  data-mono="true"
+                  value={customForm.baseUrl}
+                  placeholder="https://api.example.com/v1"
+                  onChange={(e) => setCustomForm((p) => ({ ...p, baseUrl: e.target.value }))}
+                />
+              </label>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>默认模型</div>
+                <input
+                  className={s.fieldInput}
+                  data-mono="true"
+                  value={customForm.model}
+                  placeholder="hunyuan-turbos-latest"
+                  onChange={(e) => setCustomForm((p) => ({ ...p, model: e.target.value }))}
+                />
+              </label>
+              <label className={s.fieldRow}>
+                <div className={s.fieldLabel}>API Key</div>
+                <input
+                  className={s.fieldInput}
+                  data-mono="true"
+                  type="password"
+                  value={customForm.apiKey}
+                  placeholder="可选，先建后填也行"
+                  onChange={(e) => setCustomForm((p) => ({ ...p, apiKey: e.target.value }))}
+                />
+              </label>
+            </div>
+            <div className={s.customProviderActions}>
+              <button type="button" className={s.btn} onClick={closeCustomForm}>取消</button>
+              <button
+                type="button"
+                className={s.btnPrimary}
+                disabled={
+                  saveConfig.isPending ||
+                  !customForm.name.trim() ||
+                  !customForm.baseUrl.trim() ||
+                  !customForm.model.trim()
+                }
+                onClick={handleAddCustom}
+              >
+                {saveConfig.isPending ? "保存中…" : "添加并选中"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEditChange, onSave, onCancel, onReveal, onDelete }: {
+  envKey: string; info: EnvVarInfo; revealedValue?: string; isEditing: boolean; editVal: string;
+  onEdit: () => void; onEditChange: (v: string) => void; onSave: () => void; onCancel: () => void; onReveal: () => void; onDelete: () => void;
+}) {
+  return (
+    <div className={s.row}>
+      <div className={s.rowLeft}>
+        <div className={s.rowLabel}>{envKey}</div>
+        <div className={s.rowSub}>
+          {info.description}
+          {info.url && <> · <a href={info.url} target="_blank" rel="noreferrer" className={s.link}>获取 Key ↗</a></>}
+          {info.tools.length > 0 && ` · 用于: ${info.tools.join(", ")}`}
+        </div>
+      </div>
+      <div className={s.rowRight} style={{ gap: 6, flexWrap: "wrap", minWidth: 200 }}>
+        {isEditing ? (
+          <>
+            <input className={s.input} data-mono type={info.is_password ? "password" : "text"} value={editVal} onChange={(e) => onEditChange(e.target.value)} placeholder="输入值…" style={{ width: 180 }} autoFocus />
+            <button className={s.btnPrimary} onClick={onSave}>保存</button>
+            <button className={s.btn} onClick={onCancel}>取消</button>
+          </>
+        ) : (
+          <>
+            <span className={`${s.statusBadge} ${s.envStatusBadge}`} data-on={info.is_set}>
+              {info.is_set ? (revealedValue ?? info.redacted_value ?? "已设置") : "未设置"}
+            </span>
+            <button className={s.btn} onClick={onEdit}>{info.is_set ? "替换" : "设置"}</button>
+            {info.is_set && info.is_password && (
+              <button className={s.btn} onClick={onReveal}>{revealedValue ? "隐藏" : "查看"}</button>
+            )}
+            {info.is_set && <button className={s.btnDanger} onClick={onDelete}>删除</button>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

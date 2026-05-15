@@ -1,0 +1,70 @@
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--h-bg-app);
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px 64px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.hero {
+  margin: 4px 0 18px;
+}
+
+.composerWrap {
+  margin-bottom: 28px;
+}
+
+.section {
+  margin-top: 28px;
+}
+
+.section:first-of-type {
+  margin-top: 8px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h-text-2);
+  letter-spacing: 0.4px;
+}
+
+.sectionMeta {
+  font-size: 11.5px;
+  color: var(--h-text-3);
+}
+
+.taskGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .taskGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.loading {
+  padding: 36px 0;
+  text-align: center;
+  color: var(--h-text-3);
+  font-size: 13px;
+}

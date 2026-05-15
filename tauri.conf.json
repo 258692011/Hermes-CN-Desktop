@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegoodthings/tauri-schema/main/tauri.conf.schema.json",
+  "productName": "Hermes Agent CN",
+  "version": "0.1.0",
+  "identifier": "cn.hermes.agent.desktop",
+  "build": {
+    "devUrl": "http://localhost:9545",
+    "frontendDist": "./web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Hermes Agent CN",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 680,
+        "titleBarStyle": "Overlay"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:*; img-src 'self' data: blob:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "dmg"],
+    "icon": [],
+    "resources": [],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  }
+}

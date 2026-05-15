@@ -1,0 +1,339 @@
+// Profile switching command.
+//
+// Replaces the switchProfile IPC handler at
+// hermes-cn-ui-v1/apps/desktop/src/main/main.ts lines 669-794.
+//
+// Stops the current dashboard, spawns a new one pointing at the target
+// profile's HERMES_HOME, and handles failure recovery (fall back to the
+// previous profile if the new one fails to boot).
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use tauri::State;
+
+use crate::process::dashboard;
+use crate::state::AppState;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwitchProfileInput {
+    pub name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwitchProfileResult {
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gateway_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_token: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hermes_home: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovered_previous_profile: Option<bool>,
+}
+
+fn profile_hermes_home(base: &str, profile: &str) -> PathBuf {
+    if profile == "default" {
+        PathBuf::from(base)
+    } else {
+        Path::new(base).join("profiles").join(profile)
+    }
+}
+
+fn active_profile_sticky_path(base: &str) -> PathBuf {
+    Path::new(base).join("active_profile")
+}
+
+fn write_active_profile_sticky(base: &str, profile: &str) {
+    let path = active_profile_sticky_path(base);
+    if profile == "default" {
+        let _ = fs::remove_file(&path);
+    } else {
+        let _ = fs::write(&path, profile);
+    }
+}
+
+pub fn read_active_profile_sticky(base: &str) -> String {
+    let path = active_profile_sticky_path(base);
+    match fs::read_to_string(&path) {
+        Ok(content) => {
+            let trimmed = content.trim().to_string();
+            if trimmed.is_empty() { "default".to_string() } else { trimmed }
+        }
+        Err(_) => "default".to_string(),
+    }
+}
+
+fn host_and_port() -> (String, u16) {
+    let host = std::env::var("HERMES_DESKTOP_API_HOST")
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    let port = std::env::var("HERMES_DESKTOP_API_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(9119u16);
+    (host, port)
+}
+
+#[tauri::command]
+pub async fn switch_profile(
+    input: SwitchProfileInput,
+    state: State<'_, AppState>,
+) -> Result<SwitchProfileResult, String> {
+    let name = input.name.trim().to_string();
+
+    // Validate name
+    let re = Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$").unwrap();
+    if !re.is_match(&name) {
+        return Ok(SwitchProfileResult {
+            ok: false,
+            error: Some(format!("Invalid profile name: {}", name)),
+            ..Default::default()
+        });
+    }
+
+    // Check preconditions
+    let (base, current_profile, owns_process, previous_home) = {
+        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+
+        if !inner
+            .dashboard_handle
+            .as_ref()
+            .map(|h| h.owns_process)
+            .unwrap_or(false)
+        {
+            return Ok(SwitchProfileResult {
+                ok: false,
+                error: Some("Desktop is not the dashboard owner".to_string()),
+                ..Default::default()
+            });
+        }
+
+        if inner.switch_profile_in_flight {
+            return Ok(SwitchProfileResult {
+                ok: false,
+                error: Some("Another profile switch is in progress".to_string()),
+                ..Default::default()
+            });
+        }
+
+        if name == inner.current_profile {
+            return Ok(SwitchProfileResult {
+                ok: true,
+                profile_name: Some(inner.current_profile.clone()),
+                api_base_url: Some(inner.api_base_url.clone()),
+                gateway_url: Some(inner.gateway_url.clone()),
+                session_token: inner.session_token.clone(),
+                hermes_home: Some(inner.hermes_home.clone()),
+                ..Default::default()
+            });
+        }
+
+        (
+            inner.hermes_home_base.clone(),
+            inner.current_profile.clone(),
+            true,
+            inner.hermes_home.clone(),
+        )
+    };
+
+    let new_home = profile_hermes_home(&base, &name);
+    if name != "default" && !new_home.exists() {
+        return Ok(SwitchProfileResult {
+            ok: false,
+            error: Some(format!("Profile directory missing: {}", new_home.display())),
+            ..Default::default()
+        });
+    }
+
+    // Set in-flight flag
+    {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.switch_profile_in_flight = true;
+    }
+
+    let result = do_switch_profile(
+        &state,
+        &name,
+        &new_home.to_string_lossy(),
+        &base,
+        &current_profile,
+        &previous_home,
+    )
+    .await;
+
+    // Clear in-flight flag
+    {
+        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        inner.switch_profile_in_flight = false;
+    }
+
+    Ok(result)
+}
+
+async fn do_switch_profile(
+    state: &State<'_, AppState>,
+    name: &str,
+    new_home: &str,
+    base: &str,
+    previous_profile: &str,
+    previous_home: &str,
+) -> SwitchProfileResult {
+    let (host, port) = host_and_port();
+
+    // 1. Stop existing dashboard
+    {
+        let mut inner = match state.inner.lock() {
+            Ok(i) => i,
+            Err(e) => return SwitchProfileResult {
+                ok: false,
+                error: Some(e.to_string()),
+                ..Default::default()
+            },
+        };
+        if let Some(ref mut handle) = inner.dashboard_handle {
+            handle.stop();
+        }
+        inner.dashboard_handle = None;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+
+    // 2. Spawn new dashboard
+    let handle = match dashboard::ensure_hermes_dashboard(dashboard::EnsureDashboardOptions {
+        host: host.clone(),
+        port,
+        hermes_home: new_home.to_string(),
+    })
+    .await
+    {
+        Ok(h) => h,
+        Err(e) => {
+            // Recovery: try to respawn previous profile's dashboard
+            log::error!("Failed to start dashboard for {}: {}", name, e);
+            match try_recover_previous(
+                state,
+                &host,
+                port,
+                previous_home,
+            )
+            .await
+            {
+                Ok(_) => {
+                    return SwitchProfileResult {
+                        ok: false,
+                        error: Some(format!("切换到 {} 失败：{}", name, e)),
+                        recovered_previous_profile: Some(true),
+                        ..Default::default()
+                    };
+                }
+                Err(re) => {
+                    return SwitchProfileResult {
+                        ok: false,
+                        error: Some(format!(
+                            "切换失败 ({})；恢复 {} 也失败 ({})。重启桌面端。",
+                            e, previous_profile, re
+                        )),
+                        recovered_previous_profile: Some(false),
+                        ..Default::default()
+                    };
+                }
+            }
+        }
+    };
+
+    // 3. Fetch fresh token and update state
+    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
+    let token = match env_token {
+        Some(t) => Some(t),
+        None => dashboard::fetch_session_token(&handle.api_base_url).await,
+    };
+    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
+
+    {
+        let mut inner = match state.inner.lock() {
+            Ok(i) => i,
+            Err(e) => return SwitchProfileResult {
+                ok: false,
+                error: Some(e.to_string()),
+                ..Default::default()
+            },
+        };
+        inner.api_base_url = handle.api_base_url.clone();
+        inner.gateway_url = gateway_url.clone();
+        inner.session_token = token.clone();
+        inner.hermes_home = new_home.to_string();
+        inner.current_profile = name.to_string();
+        inner.dashboard_handle = Some(handle);
+    }
+
+    // Write sticky file
+    write_active_profile_sticky(base, name);
+
+    SwitchProfileResult {
+        ok: true,
+        profile_name: Some(name.to_string()),
+        api_base_url: Some({
+            let inner = state.inner.lock().unwrap();
+            inner.api_base_url.clone()
+        }),
+        gateway_url: Some(gateway_url),
+        session_token: token,
+        hermes_home: Some(new_home.to_string()),
+        error: None,
+        recovered_previous_profile: None,
+    }
+}
+
+async fn try_recover_previous(
+    state: &State<'_, AppState>,
+    host: &str,
+    port: u16,
+    previous_home: &str,
+) -> Result<(), String> {
+    let handle = dashboard::ensure_hermes_dashboard(dashboard::EnsureDashboardOptions {
+        host: host.to_string(),
+        port,
+        hermes_home: previous_home.to_string(),
+    })
+    .await?;
+
+    let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
+    let token = match env_token {
+        Some(t) => Some(t),
+        None => dashboard::fetch_session_token(&handle.api_base_url).await,
+    };
+    let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
+
+    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    inner.api_base_url = handle.api_base_url.clone();
+    inner.gateway_url = gateway_url;
+    inner.session_token = token;
+    inner.dashboard_handle = Some(handle);
+    Ok(())
+}
+
+impl Default for SwitchProfileResult {
+    fn default() -> Self {
+        Self {
+            ok: false,
+            profile_name: None,
+            api_base_url: None,
+            gateway_url: None,
+            session_token: None,
+            hermes_home: None,
+            error: None,
+            recovered_previous_profile: None,
+        }
+    }
+}

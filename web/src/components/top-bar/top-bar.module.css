@@ -1,0 +1,59 @@
+.topBar {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  background: var(--h-bg-pane);
+  border-bottom: 1px solid var(--h-line);
+  font-family: var(--h-font-cn);
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h-text);
+}
+
+.sub {
+  font-size: 11px;
+  color: var(--h-text-3);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.chip {
+  font-size: 11px;
+  color: var(--h-text-2);
+  padding: 3px 10px;
+  border: 1px solid var(--h-line);
+  border-radius: var(--h-r-sm);
+  cursor: pointer;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chip:hover {
+  background: var(--h-bg-soft);
+}
+
+.accentDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--h-text-3);
+}

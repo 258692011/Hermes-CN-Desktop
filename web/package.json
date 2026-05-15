@@ -1,0 +1,42 @@
+{
+  "name": "@hermes/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:desktop": "vite build --base=./",
+    "lint": "eslint src vite.config.ts",
+    "preview": "vite preview",
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hermes/protocol": "workspace:*",
+    "@hermes/shared-ui": "workspace:*",
+    "@streamdown/cjk": "^1.0.3",
+    "@streamdown/math": "^1.0.2",
+    "@tanstack/react-query": "^5.100.5",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^4.1.0",
+    "jotai": "^2.12.0",
+    "katex": "^0.16.45",
+    "lucide-react": "^1.11.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router": "^7.6.0",
+    "react-router-dom": "^7.6.0",
+    "streamdown": "^2.5.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.11.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.5.2",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.0",
+    "vitest": "^4.1.5"
+  }
+}

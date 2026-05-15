@@ -1,0 +1,168 @@
+import {
+  ComposerAttachmentError,
+  type ComposerAttachment,
+  type ComposerSubmitPayload,
+} from "@/components/chat/composer-types";
+import type { AttachmentUploadResult, ImageAttachResult, InputDetectDropResult } from "@hermes/protocol";
+
+const WORKSPACE_BLOCK_START = "[Hermes UI Workspace]";
+const WORKSPACE_BLOCK_END = "[/Hermes UI Workspace]";
+const WORKSPACE_BLOCK_RE = /\n?\[Hermes UI Workspace\]\nworkspace=[^\n]*\ninstruction=[\s\S]*?\n\[\/Hermes UI Workspace\]\n?/g;
+
+const IMAGE_EXTENSIONS = new Set([
+  ".apng",
+  ".avif",
+  ".bmp",
+  ".gif",
+  ".heic",
+  ".heif",
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".tif",
+  ".tiff",
+  ".webp",
+]);
+
+export function isImagePath(path: string): boolean {
+  const clean = path.split("?")[0]?.split("#")[0] ?? path;
+  const index = clean.lastIndexOf(".");
+  if (index === -1) return false;
+  return IMAGE_EXTENSIONS.has(clean.slice(index).toLowerCase());
+}
+
+export function fileNameFromPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/").replace(/\/+$/, "");
+  return normalized.split("/").pop() || path;
+}
+
+export function stripHermesUiWorkspaceContext(text: string | null | undefined): string {
+  return (text ?? "").replace(WORKSPACE_BLOCK_RE, "").trimEnd();
+}
+
+function buildWorkspaceContext(workspacePath?: string): string {
+  const path = workspacePath?.trim();
+  if (!path) return "";
+  return [
+    WORKSPACE_BLOCK_START,
+    `workspace=${path}`,
+    "instruction=Treat this as the active workspace/root for file paths and shell commands.",
+    WORKSPACE_BLOCK_END,
+  ].join("\n");
+}
+
+function messageFromError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "附件处理失败");
+}
+
+function attachmentDisplayName(attachment: ComposerAttachment): string {
+  return attachment.uploadedName || attachment.name || fileNameFromPath(attachment.path ?? "");
+}
+
+function buildDisplayText(payload: ComposerSubmitPayload): string {
+  const text = payload.text.trim();
+  const attachments = payload.attachments.map(attachmentDisplayName);
+  if (attachments.length === 0) return text;
+  const suffix = `附件：${attachments.join("、")}`;
+  return text ? `${text}\n\n${suffix}` : suffix;
+}
+
+export async function prepareComposerPrompt(
+  sessionId: string,
+  payload: ComposerSubmitPayload,
+  helpers: {
+    uploadFile?(
+      sessionId: string,
+      file: File,
+      onProgress?: (percent: number) => void,
+    ): Promise<AttachmentUploadResult>;
+    attachImage(sessionId: string, path: string): Promise<ImageAttachResult>;
+    detectDroppedPath(sessionId: string, path: string): Promise<InputDetectDropResult>;
+    onAttachmentUpdate?(id: string, patch: Partial<ComposerAttachment>): void;
+  },
+): Promise<{ promptText: string; displayText: string }> {
+  const parts: string[] = [];
+
+  for (const attachment of payload.attachments) {
+    try {
+      let path = attachment.uploadedPath || attachment.path || "";
+      let uploadedName = attachment.uploadedName;
+
+      if (!path && attachment.file) {
+        if (!helpers.uploadFile) {
+          throw new Error("当前环境不支持上传这个附件");
+        }
+        helpers.onAttachmentUpdate?.(attachment.id, {
+          status: "uploading",
+          progress: 0,
+          error: undefined,
+        });
+        const uploaded = await helpers.uploadFile(sessionId, attachment.file, (progress) => {
+          helpers.onAttachmentUpdate?.(attachment.id, {
+            status: "uploading",
+            progress,
+          });
+        });
+        path = uploaded.path;
+        uploadedName = uploaded.filename;
+        helpers.onAttachmentUpdate?.(attachment.id, {
+          source: "uploaded",
+          uploadedPath: uploaded.path,
+          uploadedName: uploaded.filename,
+          path: uploaded.path,
+          size: uploaded.size,
+          mimeType: uploaded.mime_type ?? attachment.mimeType,
+          status: "processing",
+          progress: 100,
+        });
+      }
+
+      if (!path) {
+        throw new Error("附件缺少可读取路径");
+      }
+
+      if (attachment.kind === "image" || isImagePath(path)) {
+        helpers.onAttachmentUpdate?.(attachment.id, { status: "processing" });
+        const attached = await helpers.attachImage(sessionId, path);
+        if (attached.attached === false) {
+          throw new Error(attached.text || "图片附件未能添加");
+        }
+        helpers.onAttachmentUpdate?.(attachment.id, { status: "done", progress: 100 });
+        continue;
+      }
+
+      helpers.onAttachmentUpdate?.(attachment.id, { status: "processing" });
+      if (attachment.kind === "directory") {
+        parts.push(`[User attached directory: ${path}]`);
+        helpers.onAttachmentUpdate?.(attachment.id, { status: "done", progress: 100 });
+        continue;
+      }
+
+      const dropped = await helpers.detectDroppedPath(sessionId, path);
+      if (dropped.matched && typeof dropped.text === "string" && dropped.text.trim()) {
+        parts.push(dropped.text.trim());
+      } else {
+        parts.push(`[User attached file: ${path}]`);
+      }
+      helpers.onAttachmentUpdate?.(attachment.id, {
+        status: "done",
+        progress: 100,
+        ...(uploadedName ? { uploadedName } : {}),
+      });
+    } catch (error) {
+      throw new ComposerAttachmentError(messageFromError(error), attachment.id);
+    }
+  }
+
+  const text = payload.text.trim();
+  if (text) parts.push(text);
+
+  const workspace = buildWorkspaceContext(payload.workspacePath);
+  if (workspace) parts.unshift(workspace);
+
+  const promptText = parts.join("\n\n").trim();
+  return {
+    promptText,
+    displayText: buildDisplayText(payload),
+  };
+}

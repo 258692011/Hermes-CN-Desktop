@@ -1,0 +1,105 @@
+.page {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--h-bg-pane);
+}
+
+.composerArea {
+  position: relative;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 10px 28px 18px;
+}
+
+/* Soft fade between the scrolling timeline and the composer, mirroring
+   Claude Desktop. The gradient sits just above the composer container
+   and bleeds into the page background, so trailing message content
+   does not collide with the composer's hard top edge. */
+.composerArea::before {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  height: 20px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--h-bg-pane) 0%, transparent),
+    var(--h-bg-pane)
+  );
+  z-index: 1;
+}
+
+.approvalCard {
+  margin: 14px 0 0;
+  border: 1px solid var(--h-warn);
+  border-radius: 12px;
+  background: var(--h-bg-input);
+  box-shadow: var(--h-shadow);
+  padding: 14px;
+}
+
+.approvalHeader {
+  margin-bottom: 8px;
+  color: var(--h-warn);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.approvalCommand {
+  margin-bottom: 8px;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: var(--h-bg-code);
+  color: var(--h-text);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 9px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.approvalReason {
+  margin-bottom: 12px;
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.approvalActions {
+  display: flex;
+  gap: 8px;
+}
+
+.approvalApprove,
+.approvalDeny {
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  padding: 6px 14px;
+}
+
+.approvalApprove {
+  border: 1px solid var(--h-ok);
+  background: var(--h-ok);
+  color: #fff;
+}
+
+.approvalDeny {
+  border: 1px solid var(--h-line);
+  background: transparent;
+  color: var(--h-text);
+}
+
+@media (max-width: 720px) {
+  .composerArea {
+    padding: 8px 16px 14px;
+  }
+}

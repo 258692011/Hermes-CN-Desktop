@@ -1,0 +1,23 @@
+# Rust
+/target
+
+# Node
+node_modules/
+web/dist/
+
+# Tauri generated
+/gen/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+static/dashboard/
+static/runtime/

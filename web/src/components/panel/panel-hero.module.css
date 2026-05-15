@@ -1,0 +1,33 @@
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: end;
+}
+
+.left {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--h-text);
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.stamp {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--h-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

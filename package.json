@@ -1,0 +1,20 @@
+{
+  "name": "hermes-cn-desktop-v2",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm web:dev",
+    "web:dev": "pnpm --filter @hermes/web dev",
+    "web:build": "pnpm --filter @hermes/web build",
+    "tauri:dev": "pnpm web:dev & sleep 3 && cd . && npx @tauri-apps/cli dev",
+    "tauri:build": "pnpm web:build && npx @tauri-apps/cli build",
+    "tauri:build:debug": "pnpm web:build && npx @tauri-apps/cli build --debug",
+    "tauri:run": "cargo run",
+    "typecheck": "pnpm -r run typecheck",
+    "test:unit": "pnpm --filter @hermes/web test:unit"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0"
+  }
+}

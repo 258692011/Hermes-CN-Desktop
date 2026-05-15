@@ -1,0 +1,24 @@
+/* Hermes Design Tokens — Spacing & Density */
+
+:root,
+[data-density="comfortable"] {
+  --h-row-h: 30px;
+  --h-pad: 14px;
+  --h-fs: 12.5px;
+  --h-lh: 1.75;
+}
+
+[data-density="compact"] {
+  --h-row-h: 26px;
+  --h-pad: 10px;
+  --h-fs: 12px;
+  --h-lh: 1.6;
+}
+
+/* Single radius scale — no user-facing toggle */
+:root {
+  --h-r-sm: 4px;
+  --h-r-md: 8px;
+  --h-r-lg: 12px;
+  --h-r-pill: 999px;
+}

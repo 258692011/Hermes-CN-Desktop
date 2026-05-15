@@ -1,0 +1,132 @@
+import type {
+  FileUploadInput,
+  RuntimeInfo,
+  RuntimeInstallUpdateResult,
+  RuntimeUpdateCheckResult,
+  SwitchProfileInput,
+  SwitchProfileResult,
+} from "@hermes/protocol";
+
+export type RuntimePlatform = "web" | "electron" | "tauri";
+
+export interface ElectronApiRequestInput {
+  path: string;
+  method?: string;
+  headers?: Record<string, string>;
+  body?: string | null;
+}
+
+export interface ElectronApiRequestResult {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export interface ElectronFilePickerResult {
+  canceled: boolean;
+  paths: string[];
+}
+
+declare global {
+  interface Window {
+    __HERMES_SESSION_TOKEN__?: string;
+    __TAURI_INTERNALS__?: unknown;
+    __HERMES_RUNTIME__?: {
+      platform?: RuntimePlatform;
+      apiBaseUrl?: string;
+      gatewayUrl?: string;
+      sessionToken?: string;
+      currentProfile?: string;
+      transport?: "ws" | "sse";
+    };
+    hermesDesktop?: {
+      windowType: "electron";
+      request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
+      externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
+      uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
+      pickFiles?(): Promise<ElectronFilePickerResult>;
+      pickDirectory?(): Promise<ElectronFilePickerResult>;
+      createWorkspaceProject?(): Promise<ElectronFilePickerResult>;
+      openWorkspacePath?(input: { path: string }): Promise<ElectronApiRequestResult>;
+      getRuntimeConfig?(): Window["__HERMES_RUNTIME__"];
+      refreshGatewayUrl?(): Promise<{ gatewayUrl: string; sessionToken?: string }>;
+      getRuntimeInfo?(): Promise<RuntimeInfo>;
+      checkRuntimeUpdate?(): Promise<RuntimeUpdateCheckResult>;
+      installRuntimeUpdate?(): Promise<RuntimeInstallUpdateResult>;
+      rollbackRuntime?(): Promise<RuntimeInstallUpdateResult>;
+      switchProfile?(input: SwitchProfileInput): Promise<SwitchProfileResult>;
+      onSystemResume?(handler: () => void): () => void;
+    };
+  }
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+export const runtime = {
+  get platform(): RuntimePlatform {
+    if (window.__HERMES_RUNTIME__?.platform) return window.__HERMES_RUNTIME__.platform;
+    if (window.__TAURI_INTERNALS__) return "tauri";
+    return "web";
+  },
+
+  getSessionToken(): string | undefined {
+    return window.__HERMES_RUNTIME__?.sessionToken ?? window.__HERMES_SESSION_TOKEN__;
+  },
+
+  getApiUrl(path: string): string {
+    const baseUrl = window.__HERMES_RUNTIME__?.apiBaseUrl;
+    if (!baseUrl) return path;
+    return `${trimTrailingSlash(baseUrl)}${path.startsWith("/") ? path : `/${path}`}`;
+  },
+
+  getGatewayUrl(): string {
+    if (window.__HERMES_RUNTIME__?.gatewayUrl) {
+      return window.__HERMES_RUNTIME__.gatewayUrl;
+    }
+
+    const url = new URL("/api/ws", window.location.href);
+    url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const token = this.getSessionToken();
+    if (token) url.searchParams.set("token", token);
+    return url.toString();
+  },
+
+  async refreshGatewayUrl(): Promise<string> {
+    if (window.hermesDesktop?.refreshGatewayUrl) {
+      try {
+        const result = await window.hermesDesktop.refreshGatewayUrl();
+        if (window.__HERMES_RUNTIME__) {
+          window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
+          if (result.sessionToken) {
+            window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
+          }
+        }
+        return result.gatewayUrl;
+      } catch {}
+    }
+    return this.getGatewayUrl();
+  },
+
+  // 桌面端启动时由主进程把 sticky default 通过 --hermes-current-profile arg
+  // 推过来；web 模式下没有这个值，调用方可以走 GET /api/profiles/active
+  // 来 fallback。
+  getCurrentProfile(): string | undefined {
+    return window.__HERMES_RUNTIME__?.currentProfile;
+  },
+
+  // 桌面端 switchProfile IPC 成功后调用——把新 token / gateway URL / profile
+  // 名同步进 __HERMES_RUNTIME__，让后续 transport 调用看到新值。apiBaseUrl
+  // 通常不变（dashboard 重启时端口固定），但偶尔被 fallback 端口顶到旁边
+  // 所以也一起更新。
+  applySwitchProfileResult(result: SwitchProfileResult): void {
+    if (!result.ok || !window.__HERMES_RUNTIME__) return;
+    if (result.apiBaseUrl) window.__HERMES_RUNTIME__.apiBaseUrl = result.apiBaseUrl;
+    if (result.gatewayUrl) window.__HERMES_RUNTIME__.gatewayUrl = result.gatewayUrl;
+    if (result.sessionToken) window.__HERMES_RUNTIME__.sessionToken = result.sessionToken;
+    if (result.profileName) window.__HERMES_RUNTIME__.currentProfile = result.profileName;
+  },
+};

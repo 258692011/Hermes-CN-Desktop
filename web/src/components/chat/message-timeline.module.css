@@ -1,0 +1,904 @@
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Reserve gutter on BOTH sides so the messages column stays centered to
+     the same axis as the composer below — otherwise the right-side
+     scrollbar shifts the centered child left by half its width and
+     visually misaligns from the (scrollbar-less) composer container. */
+  scrollbar-gutter: stable both-edges;
+}
+
+.messages {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 18px 28px 24px;
+}
+
+.dateSeparator {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0 12px;
+  color: var(--h-text-3);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.messageRow {
+  display: flex;
+  width: 100%;
+  margin: 10px 0;
+  animation: fadeIn 0.18s ease-out;
+}
+
+/* Both user and assistant rows are left-aligned and full-width inside the
+   centered .messages column. We don't pull user messages to the right —
+   that breaks the visual axis between the chat column and the composer
+   below, and makes the page feel asymmetric. User messages still get a
+   subtle background fill to set them apart from assistant output. */
+.messageRow[data-role="user"],
+.messageRow[data-role="assistant"] {
+  justify-content: flex-start;
+}
+
+.messageRow[data-role="system"] {
+  justify-content: center;
+}
+
+.systemNotice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
+  row-gap: 0;
+  width: 100%;
+  max-width: 670px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: var(--h-bg-pane);
+  border: 1px solid var(--h-line);
+  color: var(--h-text-2);
+  font-family: var(--h-font-cn);
+}
+
+.systemNotice[data-error="true"] {
+  background: color-mix(in srgb, #c5462b 6%, var(--h-bg-pane));
+  border-color: color-mix(in srgb, #c5462b 26%, var(--h-line));
+}
+
+.systemNoticeIcon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--h-text-3);
+}
+
+.systemNotice[data-error="true"] .systemNoticeIcon {
+  color: #c5462b;
+}
+
+.systemNoticeBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.systemNoticeTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--h-text);
+  letter-spacing: 0.005em;
+  line-height: 1.4;
+}
+
+.systemNoticeText {
+  font-size: 12.5px;
+  color: var(--h-text-2);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.messageContent {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  padding-bottom: 24px;
+}
+
+.assistantName {
+  margin: 0 0 4px 2px;
+  color: var(--h-text-2);
+  font-size: 12px;
+}
+
+.bubble {
+  min-width: 0;
+  color: var(--h-text);
+  font-size: 14px;
+  line-height: 1.78;
+}
+
+.bubble[data-role="user"] {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--h-bg-chip);
+}
+
+.messageText {
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-break: strict;
+  text-spacing-trim: trim-start;
+  text-autospace: ideograph-alpha ideograph-numeric;
+  hanging-punctuation: first allow-end last;
+  font-kerning: normal;
+  font-variant-east-asian: proportional-width;
+}
+
+.messageText h1,
+.messageText h2,
+.messageText h3,
+.messageText h4 {
+  margin: 14px 0 8px;
+  color: var(--h-text);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.messageText h1 {
+  font-size: 18px;
+}
+
+.messageText h2 {
+  font-size: 16px;
+}
+
+.messageText h3,
+.messageText h4 {
+  font-size: 14px;
+}
+
+.messageText ul,
+.messageText ol {
+  margin: 0 0 10px 1.35em;
+  padding: 0;
+}
+
+.messageText li {
+  margin: 2px 0;
+  padding-left: 2px;
+}
+
+.messageText li > p {
+  margin: 0;
+}
+
+.messageText blockquote {
+  margin: 10px 0;
+  border-left: 3px solid var(--h-line);
+  padding-left: 10px;
+  color: var(--h-text-2);
+}
+
+.messageText table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 10px 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.messageText th,
+.messageText td {
+  border: 1px solid var(--h-line-soft);
+  padding: 5px 8px;
+  vertical-align: top;
+}
+
+.messageText th {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+  font-weight: 600;
+}
+
+.messageText a {
+  color: var(--h-accent);
+  text-decoration: none;
+}
+
+.messageText a:hover {
+  text-decoration: underline;
+}
+
+.messageText :global(.task-list-item) {
+  list-style: none;
+}
+
+.messageText :global(.task-list-item input) {
+  margin: 0 6px 0 -1.25em;
+  vertical-align: -1px;
+}
+
+.messageText :global(.katex-display) {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 10px 0;
+  padding-bottom: 2px;
+}
+
+.turnText + .turnText,
+.turnText + .reasoning,
+.turnText + .progressBlock,
+.turnText + .toolChain,
+.reasoning + .toolChain,
+.reasoning + .turnText,
+.toolChain + .progressBlock,
+.toolChain + .turnText {
+  margin-top: 10px;
+}
+
+.messageText p {
+  margin: 0 0 10px;
+  text-wrap: pretty;
+}
+
+.messageText p:last-child {
+  margin-bottom: 0;
+}
+
+.messageText code {
+  border-radius: 5px;
+  background: var(--h-bg-code);
+  padding: 1px 5px;
+  font-family: var(--h-font-mono);
+  font-size: 0.9em;
+  line-break: auto;
+  text-autospace: no-autospace;
+  text-spacing-trim: normal;
+  font-variant-east-asian: normal;
+}
+
+.messageText :global([data-streamdown="code-block"]) {
+  overflow: hidden;
+  margin: 8px 0;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: var(--h-bg-code);
+  color: var(--h-text-2);
+}
+
+.messageText :global([data-streamdown="code-block-header"]) {
+  border-bottom: 1px solid var(--h-line-soft);
+  padding: 5px 10px;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.messageText :global([data-streamdown="code-block-body"]) {
+  overflow-x: auto;
+  padding: 10px 12px;
+}
+
+.messageText :global([data-streamdown="code-block-body"] pre) {
+  margin: 0;
+  background: transparent !important;
+  color: inherit;
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  line-break: auto;
+  text-autospace: no-autospace;
+  text-spacing-trim: normal;
+  font-variant-east-asian: normal;
+}
+
+.messageText :global([data-streamdown="code-block-body"] code) {
+  display: block;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.messageText :global([data-streamdown="table-wrapper"]) {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.messageText :global([data-streamdown="table-wrapper"] table) {
+  margin: 0;
+}
+
+.codeBlock,
+.toolBody pre {
+  overflow-x: auto;
+  margin: 8px 0;
+  border: 1px solid var(--h-line-soft);
+  border-radius: 8px;
+  background: var(--h-bg-code);
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  line-break: auto;
+  text-autospace: no-autospace;
+  text-spacing-trim: normal;
+  font-variant-east-asian: normal;
+}
+
+.reasoningBody {
+  margin: 6px 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-2);
+  font-family: var(--h-font-serif);
+  font-size: 13.5px;
+  line-height: 1.78;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-variant-east-asian: proportional-width;
+}
+
+.codeBlock {
+  padding: 10px 12px;
+}
+
+.messageText :global(.shiki) {
+  background: var(--h-bg-code) !important;
+}
+
+/* Shiki renders each line of a code block as a direct-child <span> of <code>
+   but does NOT insert "\n" text nodes between them. With white-space: pre-wrap
+   this collapses multiline ASCII art / tree diagrams into a single visual run.
+   Force each line span to its own row so the layout matches the source content. */
+.messageText :global(pre code > span) {
+  display: block;
+}
+
+:global([data-theme="dark"]) .messageText :global(.shiki) {
+  color: var(--shiki-dark) !important;
+}
+
+:global([data-theme="dark"]) .messageText :global(.shiki span) {
+  color: var(--shiki-dark) !important;
+}
+
+.messageText :global(.line) {
+  min-height: 1.55em;
+}
+
+.messageActions {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--h-text-3);
+  font-size: 10px;
+}
+
+.messageRow[data-role="user"] .messageActions {
+  right: 0;
+}
+
+.messageRow[data-role="assistant"] .messageActions {
+  left: 0;
+}
+
+.messageActionsControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.messageActions button {
+  border: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+}
+
+.messageActions button:hover {
+  color: var(--h-text);
+}
+
+.messageStats {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--h-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.messageStatsInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.messageStatsInline > span {
+  white-space: nowrap;
+}
+
+.messageStatsInline > span + span::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--h-text-3);
+  opacity: 0.6;
+}
+
+.messageStats[data-risk="warn"] {
+  color: var(--h-warn);
+}
+
+.messageStats[data-risk="err"] {
+  color: var(--h-err);
+}
+
+.messageStatsToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  color: var(--h-text-3);
+}
+
+.messageStatsToggle:hover,
+.messageStatsToggle[aria-expanded="true"] {
+  background: var(--h-bg-soft);
+  color: var(--h-text);
+}
+
+.messageStatsPopover {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 200px;
+  border: 1px solid var(--h-line);
+  border-radius: 12px;
+  background: var(--h-bg-input);
+  box-shadow: var(--h-shadow);
+  color: var(--h-text);
+  padding: 10px 12px;
+  font-size: 11px;
+  text-align: left;
+}
+
+.messageStatsPopover dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.messageStatsPopover dt {
+  color: var(--h-text-3);
+  font-weight: 500;
+}
+
+.messageStatsPopover dd {
+  margin: 0;
+  color: var(--h-text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.messageStatsPopover dd[data-risk="warn"] {
+  color: var(--h-warn);
+}
+
+.messageStatsPopover dd[data-risk="err"] {
+  color: var(--h-err);
+}
+
+.messageStatsModel {
+  font-family: var(--h-font-mono);
+  font-size: 10.5px;
+}
+
+.reasoning {
+  margin-top: 10px;
+}
+
+.disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
+.chevron {
+  display: inline-block;
+  transition: transform 0.15s;
+}
+
+.disclosure[data-open="true"] .chevron {
+  transform: rotate(90deg);
+}
+
+.reasoningBody {
+  padding: 6px 0 8px 18px;
+  border-left: 1px solid var(--h-line);
+}
+
+.progressBlock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: default;
+  font-family: var(--h-font-cn);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0;
+  text-autospace: no-autospace;
+  text-spacing-trim: normal;
+  width: 100%;
+}
+
+.thinkingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--h-ok);
+  flex: 0 0 auto;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.thinkingLabel {
+  color: var(--h-text-2);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.thinkingMeta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--h-text-3);
+  animation: fadeIn 0.3s ease;
+}
+
+.thinkingModel {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thinkingSep {
+  opacity: 0.6;
+}
+
+.thinkingTimer {
+  margin-left: auto;
+  font-family: var(--h-font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--h-text-3);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.toolChain {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  max-width: 100%;
+  margin-top: 0;
+}
+
+.toolActivity {
+  max-width: 100%;
+  color: var(--h-text-3);
+  font-size: 12px;
+}
+
+.toolActivitySummary {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--h-text-3);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 0;
+  text-align: left;
+}
+
+.toolActivitySummary:hover .toolActivityLabel,
+.toolActivitySummary:focus-visible .toolActivityLabel {
+  color: var(--h-text-2);
+}
+
+.toolActivitySummary:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid color-mix(in srgb, var(--h-accent), transparent 55%);
+  outline-offset: 3px;
+}
+
+.toolActivityChevron {
+  display: inline-block;
+  color: var(--h-text-3);
+  font-size: 13px;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+
+.toolActivitySummary[data-open="true"] .toolActivityChevron {
+  transform: rotate(90deg);
+}
+
+.toolActivityLabel {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--h-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolActivityMeta {
+  min-width: 0;
+  max-width: 360px;
+  overflow: hidden;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolActivityError {
+  max-width: 100%;
+  margin: 4px 0 0 20px;
+  overflow-wrap: anywhere;
+  color: var(--h-err);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.toolActivityDetails {
+  display: flex;
+  width: min(100%, 640px);
+  max-width: 100%;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-left: 16px;
+}
+
+.toolCard {
+  max-width: 100%;
+  width: 100%;
+}
+
+.toolHeader {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 7px;
+  min-height: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--h-text-2);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  text-align: left;
+}
+
+.toolHeader:disabled {
+  cursor: default;
+}
+
+.toolHeader:not(:disabled):hover,
+.toolHeader[data-open="true"] {
+  background: var(--h-bg-soft);
+}
+
+.toolStatus {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--h-text-3);
+  flex: 0 0 auto;
+}
+
+.toolStatus[data-status="running"] {
+  background: var(--h-ok);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.toolStatus[data-status="done"] {
+  background: var(--h-ok);
+}
+
+.toolStatus[data-status="error"] {
+  background: var(--h-err);
+}
+
+.toolName {
+  min-width: 0;
+  color: var(--h-text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolContext {
+  min-width: 0;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+}
+
+.toolElapsed {
+  flex: 0 0 auto;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolBadge {
+  flex: 0 0 auto;
+  color: var(--h-text-3);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--h-bg-soft);
+}
+
+.toolGroupBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 3px 0 6px 14px;
+  padding-left: 6px;
+  border-left: 1px solid var(--h-line-soft);
+}
+
+.toolBody {
+  max-width: 100%;
+  margin: 3px 0 6px 17px;
+}
+
+.toolBody pre {
+  max-width: 100%;
+  margin: 4px 0;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 11px;
+}
+
+.toolBody pre[data-error="true"] {
+  border-color: color-mix(in srgb, var(--h-err), transparent 55%);
+  color: var(--h-err);
+}
+
+.statusMessage {
+  margin: 10px 0 0 2px;
+  color: var(--h-text-3);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.empty {
+  display: flex;
+  min-height: 300px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--h-text-3);
+  text-align: center;
+}
+
+.emptyTitle {
+  color: var(--h-text-2);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.emptySub {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .messages {
+    padding: 14px 16px 20px;
+  }
+
+  .messageContent {
+    max-width: 100%;
+  }
+
+  .bubble[data-role="user"] {
+    width: 100%;
+  }
+
+  .toolContext {
+    max-width: 160px;
+  }
+
+  .toolActivityMeta {
+    max-width: 180px;
+  }
+}

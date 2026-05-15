@@ -1,0 +1,369 @@
+import { useCallback, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAtomValue, useSetAtom } from "jotai";
+import {
+  ConfigSetResult,
+  ImageAttachResult,
+  InputDetectDropResult,
+  ModelOptionsResult,
+  PromptSubmitParams,
+  SessionCreateResult,
+  SessionResumeResult,
+  SessionTitleResult,
+  SessionUsageResult,
+  type GatewayEvent,
+} from "@hermes/protocol";
+import { getGatewayClient } from "@/lib/gateway-client";
+import {
+  getCachedModelOptions,
+  invalidateModelOptionsCache,
+} from "@/lib/model-options-cache";
+import { normalizeProviderIdForGateway } from "@/lib/provider-id";
+import { rememberSessionMapping, resolveGatewaySessionId } from "@/lib/session-map";
+import {
+  applyGatewayEventAtom,
+  chatRuntimeBySessionAtom,
+  ensureChatSessionAtom,
+  gwConnectionAtom,
+  gwSessionIdAtom,
+  resetChatSessionAtom,
+  resetStreamStateAtom,
+  setSessionErrorAtom,
+  startPromptAtom,
+  terminateAllStreamsAtom,
+} from "@/stores/chat";
+
+type GatewayState = ReturnType<typeof getGatewayClient>["state"];
+
+interface GatewaySubscriber {
+  setConnectionState: (state: GatewayState) => void;
+  applyGatewayEvent: (event: GatewayEvent) => void;
+  terminateAllStreams: () => void;
+}
+
+interface GatewaySubscriptionBridge {
+  subscribers: GatewaySubscriber[];
+  unsubscribeState: () => void;
+  unsubscribeAny: () => void;
+  unsubscribeDisconnect: () => void;
+}
+
+let gatewayBridge: GatewaySubscriptionBridge | null = null;
+
+function primarySubscriber(bridge: GatewaySubscriptionBridge): GatewaySubscriber | undefined {
+  return bridge.subscribers[0];
+}
+
+function ensureGatewayBridge(): GatewaySubscriptionBridge {
+  if (gatewayBridge) return gatewayBridge;
+
+  const bridge: GatewaySubscriptionBridge = {
+    subscribers: [],
+    unsubscribeState: () => {},
+    unsubscribeAny: () => {},
+    unsubscribeDisconnect: () => {},
+  };
+  const client = getGatewayClient();
+  client.enableAutoReconnect();
+
+  bridge.unsubscribeState = client.onState((state) => {
+    for (const sub of bridge.subscribers) sub.setConnectionState(state);
+  });
+  bridge.unsubscribeAny = client.onAny((event) => {
+    primarySubscriber(bridge)?.applyGatewayEvent(event);
+  });
+  bridge.unsubscribeDisconnect = client.on("gateway.disconnected", () => {
+    primarySubscriber(bridge)?.terminateAllStreams();
+  });
+  gatewayBridge = bridge;
+  return bridge;
+}
+
+function subscribeGateway(
+  setConnectionState: (state: GatewayState) => void,
+  applyGatewayEvent: (event: GatewayEvent) => void,
+  terminateAllStreams: () => void,
+): () => void {
+  const bridge = ensureGatewayBridge();
+  const subscriber = { setConnectionState, applyGatewayEvent, terminateAllStreams };
+  bridge.subscribers.push(subscriber);
+  setConnectionState(getGatewayClient().state);
+
+  return () => {
+    const index = bridge.subscribers.indexOf(subscriber);
+    if (index >= 0) {
+      bridge.subscribers.splice(index, 1);
+    }
+    if (bridge.subscribers.length === 0 && gatewayBridge === bridge) {
+      bridge.unsubscribeState();
+      bridge.unsubscribeAny();
+      bridge.unsubscribeDisconnect();
+      getGatewayClient().disableAutoReconnect();
+      gatewayBridge = null;
+    }
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "发生错误");
+}
+
+function isSessionBusyError(error: unknown): boolean {
+  return error instanceof Error && error.message.toLowerCase().includes("session busy");
+}
+
+async function rememberPersistentSessionKey(gatewaySessionId: string) {
+  try {
+    const result = SessionTitleResult.parse(
+      await getGatewayClient().request("session.title", {
+        session_id: gatewaySessionId,
+      }),
+    );
+    if (result.session_key) {
+      rememberSessionMapping(gatewaySessionId, result.session_key);
+    }
+  } catch {}
+}
+
+export function useGateway() {
+  const queryClient = useQueryClient();
+  const connectionState = useAtomValue(gwConnectionAtom);
+  const gwSessionId = useAtomValue(gwSessionIdAtom);
+  const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
+  const setConnectionState = useSetAtom(gwConnectionAtom);
+  const setGwSessionId = useSetAtom(gwSessionIdAtom);
+  const applyGatewayEvent = useSetAtom(applyGatewayEventAtom);
+  const ensureChatSession = useSetAtom(ensureChatSessionAtom);
+  const resetChatSession = useSetAtom(resetChatSessionAtom);
+  const resetStreamState = useSetAtom(resetStreamStateAtom);
+  const startPrompt = useSetAtom(startPromptAtom);
+  const setSessionError = useSetAtom(setSessionErrorAtom);
+  const terminateAllStreams = useSetAtom(terminateAllStreamsAtom);
+
+  const activeRuntime = gwSessionId ? runtimeBySession[gwSessionId] : undefined;
+  const streamStatus = activeRuntime?.streamStatus ?? "idle";
+
+  useEffect(() => {
+    return subscribeGateway(setConnectionState, applyGatewayEvent, terminateAllStreams);
+  }, [applyGatewayEvent, setConnectionState, terminateAllStreams]);
+
+  const ensureSubscribed = useCallback(() => {
+    ensureGatewayBridge();
+  }, []);
+
+  const connect = useCallback(async () => {
+    ensureSubscribed();
+    await getGatewayClient().connect();
+  }, [ensureSubscribed]);
+
+  const createSession = useCallback(async (): Promise<string> => {
+    ensureSubscribed();
+    const result = SessionCreateResult.parse(
+      await getGatewayClient().request("session.create", {}),
+    );
+    setGwSessionId(result.session_id);
+    resetChatSession(result.session_id);
+    void rememberPersistentSessionKey(result.session_id);
+    return result.session_id;
+  }, [ensureSubscribed, resetChatSession, setGwSessionId]);
+
+  const resumeSession = useCallback(async (persistentSessionId: string): Promise<string> => {
+    ensureSubscribed();
+    const result = SessionResumeResult.parse(
+      await getGatewayClient().request("session.resume", {
+        session_id: persistentSessionId,
+      }),
+    );
+    setGwSessionId(result.session_id);
+    resetChatSession(result.session_id);
+    rememberSessionMapping(result.session_id, result.resumed ?? persistentSessionId);
+    return result.session_id;
+  }, [ensureSubscribed, resetChatSession, setGwSessionId]);
+
+  const sendPrompt = useCallback(
+    async (
+      sessionId: string,
+      text: string,
+      options?: { displayText?: string; images?: string[] },
+    ) => {
+      ensureSubscribed();
+      ensureChatSession(sessionId);
+      startPrompt({ sessionId, text: options?.displayText ?? text });
+
+      try {
+        const params = PromptSubmitParams.parse({
+          session_id: sessionId,
+          text,
+          ...(options?.images?.length ? { images: options.images } : {}),
+        });
+
+        try {
+          await getGatewayClient().request("prompt.submit", params);
+        } catch (err) {
+          if (isSessionBusyError(err)) {
+            await getGatewayClient().request(
+              "session.interrupt",
+              { session_id: sessionId },
+              { timeoutMs: 10_000 },
+            );
+            resetStreamState(sessionId);
+            await getGatewayClient().request("prompt.submit", params);
+          } else {
+            throw err;
+          }
+        }
+
+        await rememberPersistentSessionKey(sessionId);
+      } catch (error) {
+        setSessionError({ sessionId, message: errorMessage(error) });
+        throw error;
+      }
+    },
+    [ensureChatSession, ensureSubscribed, resetStreamState, setSessionError, startPrompt],
+  );
+
+  const getSessionUsage = useCallback(
+    async (sessionId: string): Promise<SessionUsageResult> => {
+      ensureSubscribed();
+      return SessionUsageResult.parse(
+        await getGatewayClient().request("session.usage", { session_id: sessionId }),
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  const getModelOptions = useCallback(
+    async (sessionId?: string): Promise<ModelOptionsResult> => {
+      ensureSubscribed();
+      return getCachedModelOptions(
+        sessionId,
+        async () => ModelOptionsResult.parse(
+          await getGatewayClient().request(
+            "model.options",
+            sessionId ? { session_id: sessionId } : {},
+          ),
+        ),
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  const setSessionModel = useCallback(
+    async (
+      sessionId: string,
+      model: string,
+      provider?: string,
+    ): Promise<ConfigSetResult> => {
+      ensureSubscribed();
+      const normalizedProvider = normalizeProviderIdForGateway(provider);
+      const value = normalizedProvider ? `${model} --provider ${normalizedProvider}` : model;
+      const result = ConfigSetResult.parse(
+        await getGatewayClient().request("config.set", {
+          session_id: sessionId,
+          key: "model",
+          value,
+        }),
+      );
+      invalidateModelOptionsCache(sessionId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+        queryClient.invalidateQueries({ queryKey: ["session"] }),
+        queryClient.invalidateQueries({ queryKey: ["model-info"] }),
+      ]);
+      return result;
+    },
+    [ensureSubscribed, queryClient],
+  );
+
+  const attachImage = useCallback(
+    async (sessionId: string, path: string): Promise<ImageAttachResult> => {
+      ensureSubscribed();
+      return ImageAttachResult.parse(
+        await getGatewayClient().request("image.attach", {
+          session_id: sessionId,
+          path,
+        }),
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  const detectDroppedPath = useCallback(
+    async (sessionId: string, path: string): Promise<InputDetectDropResult> => {
+      ensureSubscribed();
+      return InputDetectDropResult.parse(
+        await getGatewayClient().request("input.detect_drop", {
+          session_id: sessionId,
+          text: path,
+        }),
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  const interruptSession = useCallback(
+    async (sessionId: string) => {
+      const gatewaySessionId = resolveGatewaySessionId(sessionId) ?? sessionId;
+      if (!gatewaySessionId) return;
+      ensureSubscribed();
+
+      try {
+        await getGatewayClient().request(
+          "session.interrupt",
+          { session_id: gatewaySessionId },
+          { timeoutMs: 10_000 },
+        );
+      } catch (error) {
+        setSessionError({ sessionId: gatewaySessionId, message: errorMessage(error) });
+        throw error;
+      }
+    },
+    [ensureSubscribed, setSessionError],
+  );
+
+  const setSessionTitle = useCallback(
+    async (sessionId: string, title: string) => {
+      const cleanTitle = title.trim();
+      if (!sessionId || !cleanTitle) return;
+      ensureSubscribed();
+      const result = SessionTitleResult.parse(
+        await getGatewayClient().request("session.title", {
+          session_id: sessionId,
+          title: cleanTitle,
+        }),
+      );
+      if (result.session_key) {
+        rememberSessionMapping(sessionId, result.session_key);
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sessions"] }),
+        queryClient.invalidateQueries({ queryKey: ["session"] }),
+      ]);
+      return result.title ?? cleanTitle;
+    },
+    [ensureSubscribed, queryClient],
+  );
+
+  const disconnect = useCallback(() => {
+    getGatewayClient().close();
+    setGwSessionId(null);
+  }, [setGwSessionId]);
+
+  return {
+    connectionState,
+    gwSessionId,
+    streamStatus,
+    connect,
+    createSession,
+    resumeSession,
+    sendPrompt,
+    getSessionUsage,
+    getModelOptions,
+    setSessionModel,
+    attachImage,
+    detectDroppedPath,
+    interruptSession,
+    setSessionTitle,
+    disconnect,
+  };
+}

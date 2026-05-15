@@ -1,0 +1,66 @@
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { usePlatform } from "@hermes/shared-ui";
+import { useBootstrapActiveProfile } from "@/hooks/use-profiles";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { ProfileSwitchOverlay } from "@/components/profile-switch-overlay";
+import { Sidebar } from "@/components/sidebar/sidebar";
+import { PanelRoute } from "@/routes/panel";
+import { NewTaskRoute } from "@/routes/new-task";
+import { DetailRoute } from "@/routes/detail";
+import { HistoryRoute } from "@/routes/history";
+import { ProjectsRoute } from "@/routes/projects";
+import { ProjectDetailRoute } from "@/routes/project-detail";
+import { SkillsRoute } from "@/routes/skills";
+import { ModelsRoute } from "@/routes/models";
+import { McpRoute } from "@/routes/mcp";
+import { ProfilesRoute } from "@/routes/profiles";
+import { CronRoute } from "@/routes/cron";
+import { HealthRoute } from "@/routes/health";
+import { LogsRoute } from "@/routes/logs";
+import { SettingsRoute } from "@/routes/settings";
+import { DevPrimitivesRoute } from "@/routes/dev-primitives";
+
+export function App() {
+  const platform = usePlatform();
+  const location = useLocation();
+  const isSettingsRoute = location.pathname.startsWith("/settings");
+  // 首次启动时让 atom 跟上后端 sticky default（多 tab 之间 atomWithStorage
+  // 自动同步，所以这里只需要做一次种子）
+  useBootstrapActiveProfile();
+
+  return (
+    <div
+      lang="zh-CN"
+      data-hermes-platform={platform}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        display: "flex",
+        overflow: "hidden",
+      }}
+    >
+      {!isSettingsRoute && <Sidebar />}
+      <Routes>
+        <Route path="/" element={<PanelRoute />} />
+        <Route path="/new" element={<NewTaskRoute />} />
+        <Route path="/tasks/:taskId" element={<ErrorBoundary><DetailRoute /></ErrorBoundary>} />
+        <Route path="/history" element={<HistoryRoute />} />
+        <Route path="/projects" element={<ProjectsRoute />} />
+        <Route path="/projects/:workspacePath" element={<ProjectDetailRoute />} />
+        <Route path="/skills" element={<SkillsRoute />} />
+        <Route path="/models" element={<ModelsRoute />} />
+        <Route path="/mcp" element={<McpRoute />} />
+        <Route path="/profiles" element={<ProfilesRoute />} />
+        <Route path="/cron" element={<CronRoute />} />
+        <Route path="/health" element={<HealthRoute />} />
+        <Route path="/logs" element={<LogsRoute />} />
+        <Route path="/settings" element={<ErrorBoundary><SettingsRoute /></ErrorBoundary>} />
+        {import.meta.env.DEV && (
+          <Route path="/dev/primitives" element={<DevPrimitivesRoute />} />
+        )}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <ProfileSwitchOverlay />
+    </div>
+  );
+}

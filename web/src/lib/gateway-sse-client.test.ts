@@ -1,0 +1,246 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GatewaySseClient } from "./gateway-sse-client";
+
+// Minimal EventSource mock that lets us drive open/error/messages
+// from the test instead of going to the network.
+class MockEventSource {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSED = 2;
+  static instances: MockEventSource[] = [];
+
+  readyState = MockEventSource.CONNECTING;
+  onmessage: ((ev: { data: string }) => void) | null = null;
+  onerror: (() => void) | null = null;
+  closed = false;
+  private listeners = new Map<string, Set<(ev: { data: string }) => void>>();
+
+  constructor(public url: string) {
+    MockEventSource.instances.push(this);
+  }
+
+  addEventListener(type: string, cb: (ev: { data: string }) => void): void {
+    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+    this.listeners.get(type)!.add(cb);
+  }
+
+  close(): void {
+    this.readyState = MockEventSource.CLOSED;
+    this.closed = true;
+  }
+
+  // --- test driver helpers ---
+
+  emitNamed(type: string, data: object): void {
+    this.readyState = MockEventSource.OPEN;
+    const set = this.listeners.get(type);
+    set?.forEach((cb) => cb({ data: JSON.stringify(data) }));
+  }
+
+  emitMessage(data: object): void {
+    this.readyState = MockEventSource.OPEN;
+    this.onmessage?.({ data: JSON.stringify(data) });
+  }
+
+  emitError(): void {
+    this.readyState = MockEventSource.CLOSED;
+    this.onerror?.();
+  }
+}
+
+const ORIGINAL_ES = (globalThis as any).EventSource;
+const ORIGINAL_FETCH = globalThis.fetch;
+
+function installRuntimeStub(token = "test-token", apiBase = "http://127.0.0.1:9120"): void {
+  (globalThis as any).window = (globalThis as any).window ?? globalThis;
+  (window as any).__HERMES_RUNTIME__ = {
+    platform: "web",
+    apiBaseUrl: apiBase,
+    sessionToken: token,
+  };
+  (window as any).__HERMES_SESSION_TOKEN__ = token;
+  (window as any).location = { href: `${apiBase}/`, search: "" };
+}
+
+beforeEach(() => {
+  MockEventSource.instances = [];
+  (globalThis as any).EventSource = MockEventSource;
+  (globalThis as any).EventSource.OPEN = MockEventSource.OPEN;
+  (globalThis as any).EventSource.CLOSED = MockEventSource.CLOSED;
+  installRuntimeStub();
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  (globalThis as any).EventSource = ORIGINAL_ES;
+  globalThis.fetch = ORIGINAL_FETCH;
+});
+
+describe("GatewaySseClient", () => {
+  it("opens an EventSource with token in query and resolves connect() on client_id frame", async () => {
+    const client = new GatewaySseClient();
+    const connectP = client.connect();
+
+    // EventSource constructed
+    expect(MockEventSource.instances).toHaveLength(1);
+    const es = MockEventSource.instances[0];
+    expect(es.url).toContain("/api/v2/events");
+    expect(es.url).toContain("token=test-token");
+
+    // Server emits client_id
+    es.emitNamed("client_id", { client_id: "cid-abc" });
+    await connectP;
+
+    expect(client.state).toBe("open");
+  });
+
+  it("connect() rejects on timeout if no client_id arrives", async () => {
+    const client = new GatewaySseClient();
+    const connectP = client.connect({ timeoutMs: 5_000 });
+
+    vi.advanceTimersByTime(5_001);
+
+    await expect(connectP).rejects.toThrow(/timeout/i);
+    expect(client.state).toBe("error");
+  });
+
+  it("forwards typed events to on()/onAny() listeners", async () => {
+    const client = new GatewaySseClient();
+    const typed: any[] = [];
+    const any: any[] = [];
+    client.on("message.delta", (ev) => typed.push(ev));
+    client.onAny((ev) => any.push(ev));
+
+    const connectP = client.connect();
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "cid-1" });
+    await connectP;
+
+    es.emitMessage({
+      jsonrpc: "2.0",
+      method: "event",
+      params: { type: "message.delta", session_id: "s1", payload: { text: "hi" } },
+    });
+    es.emitMessage({
+      jsonrpc: "2.0",
+      method: "event",
+      params: { type: "tool.start", session_id: "s1", payload: { name: "Read" } },
+    });
+
+    expect(typed).toHaveLength(1);
+    expect(typed[0].type).toBe("message.delta");
+    expect(any).toHaveLength(2);
+  });
+
+  it("notifies state listeners with current state on subscribe", async () => {
+    const client = new GatewaySseClient();
+    const states: string[] = [];
+    const unsub = client.onState((s) => states.push(s));
+    expect(states).toEqual(["idle"]);
+
+    const connectP = client.connect();
+    expect(states.at(-1)).toBe("connecting");
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "x" });
+    await connectP;
+    expect(states.at(-1)).toBe("open");
+
+    unsub();
+  });
+
+  it("request() POSTs the right URL/body and resolves with result", async () => {
+    const client = new GatewaySseClient();
+    const connectP = client.connect();
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "cid-9" });
+    await connectP;
+
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ jsonrpc: "2.0", id: "ignored", result: { foo: "bar" } }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    globalThis.fetch = fetchMock as any;
+
+    const result = await client.request<{ foo: string }>("model.options", { hint: 1 });
+    expect(result).toEqual({ foo: "bar" });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = call;
+    expect(url).toContain("/api/v2/rpc");
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer test-token");
+    expect(headers["X-Hermes-Client-Id"]).toBe("cid-9");
+    const body = JSON.parse(String(init.body));
+    expect(body.method).toBe("model.options");
+    expect(body.params).toEqual({ hint: 1 });
+    expect(body.jsonrpc).toBe("2.0");
+  });
+
+  it("request() rejects with the JSON-RPC error message", async () => {
+    const client = new GatewaySseClient();
+    const connectP = client.connect();
+    MockEventSource.instances[0].emitNamed("client_id", { client_id: "c" });
+    await connectP;
+
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: "x",
+          error: { code: -32601, message: "unknown method: foo" },
+        }),
+        { status: 200 },
+      ),
+    ) as any;
+
+    await expect(client.request("foo")).rejects.toThrow(/unknown method: foo/);
+  });
+
+  it("close() tears down EventSource and resets state to idle", async () => {
+    const client = new GatewaySseClient();
+    const p = client.connect();
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "c" });
+    await p;
+
+    client.close();
+    expect(es.closed).toBe(true);
+    expect(client.state).toBe("idle");
+  });
+
+  it("emits gateway.disconnected when EventSource closes unexpectedly", async () => {
+    const client = new GatewaySseClient();
+    client.enableAutoReconnect();
+    const p = client.connect();
+    const es = MockEventSource.instances[0];
+    es.emitNamed("client_id", { client_id: "c" });
+    await p;
+
+    const events: any[] = [];
+    client.on("gateway.disconnected", (ev) => events.push(ev));
+
+    es.emitError(); // CLOSED
+    expect(events).toHaveLength(1);
+    expect(client.state).toBe("closed");
+  });
+
+  it("forceReconnect() drops current ES and opens a new one when autoReconnect=true", async () => {
+    const client = new GatewaySseClient();
+    client.enableAutoReconnect();
+    const p = client.connect();
+    const es1 = MockEventSource.instances[0];
+    es1.emitNamed("client_id", { client_id: "c1" });
+    await p;
+
+    client.forceReconnect("test");
+    expect(es1.closed).toBe(true);
+    expect(MockEventSource.instances).toHaveLength(2);
+    const es2 = MockEventSource.instances[1];
+    expect(es2.closed).toBe(false);
+  });
+});

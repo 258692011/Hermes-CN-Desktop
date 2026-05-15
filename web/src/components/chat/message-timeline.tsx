@@ -1,0 +1,690 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { useAtomValue } from "jotai";
+import { AlertTriangle, Info } from "lucide-react";
+import { showReasoningAtom } from "@/stores/ui";
+import type { AssistantMessageStats, ChatMessage, ChatToolItem } from "./chat-types";
+import { MessageText } from "./message-text";
+import s from "./message-timeline.module.css";
+import { summarizeToolActivity } from "./tool-activity";
+import { groupConsecutiveTools, groupElapsedMs } from "./group-tools";
+import { truncateMiddle } from "@/lib/truncate-middle";
+import {
+  formatCostUsd,
+  formatDurationMs,
+  formatElapsedTimer,
+  formatTokPerSec,
+  formatTokens,
+} from "@/lib/format";
+import type { SessionUsageResult } from "@hermes/protocol";
+
+interface MessageTimelineProps {
+  messages: ChatMessage[];
+  loading?: boolean;
+  statusMessage?: string;
+  pendingApproval?: ReactNode;
+  turnStartedAt?: number;
+  sessionUsage?: SessionUsageResult | null;
+}
+
+function formatDay(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  if (date.toDateString() === now.toDateString()) return "今天";
+  if (date.toDateString() === yesterday.toDateString()) return "昨天";
+  return date.toLocaleDateString("zh-CN", {
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  });
+}
+
+function formatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function copyText(text?: string) {
+  if (!text) return;
+  void navigator.clipboard?.writeText(text);
+}
+
+const PROGRESS_TRANSLATIONS: Record<string, string> = {
+  analyzing: "分析中",
+  brainstorming: "头脑风暴中",
+  cogitating: "沉思中",
+  computing: "计算中",
+  contemplating: "推理中",
+  deliberating: "思考中",
+  decrypting: "解密中",
+  forging: "锻造中",
+  formulating: "构思中",
+  "hammering plans": "敲定方案中",
+  "jacking in": "接入中",
+  mulling: "琢磨中",
+  musing: "遐想中",
+  plotting: "谋划中",
+  pondering: "斟酌中",
+  processing: "处理中",
+  reasoning: "推理中",
+  reflecting: "反思中",
+  ruminating: "深思中",
+  synthesizing: "综合分析中",
+  uploading: "上传中",
+};
+
+function localizeProgressLabel(text?: string): string {
+  if (!text) return "思考中";
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const base = normalized.replace(/\.{2,}|…/g, "").trim();
+  if (!base) return "思考中";
+  for (const [en, zh] of Object.entries(PROGRESS_TRANSLATIONS)) {
+    if (base.toLowerCase().endsWith(en)) {
+      return base.slice(0, base.length - en.length) + zh;
+    }
+  }
+  return base;
+}
+
+const LONG_THINKING_THRESHOLD_S = 120;
+
+interface ProgressBlockProps {
+  turnStartedAt?: number;
+  sessionUsage?: SessionUsageResult | null;
+  progressText?: string;
+}
+
+function ProgressBlock({ turnStartedAt, sessionUsage, progressText }: ProgressBlockProps) {
+  const [elapsed, setElapsed] = useState(0);
+  const peakTokensRef = useRef(0);
+
+  useEffect(() => {
+    if (!turnStartedAt) return;
+    setElapsed(Date.now() - turnStartedAt);
+    const timer = window.setInterval(() => {
+      setElapsed(Date.now() - turnStartedAt);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [turnStartedAt]);
+
+  const label = localizeProgressLabel(progressText);
+  const elapsedSeconds = Math.floor(elapsed / 1000);
+  const showLongHint = elapsedSeconds >= LONG_THINKING_THRESHOLD_S;
+
+  const rawTotal =
+    sessionUsage?.total ??
+    ((sessionUsage?.input ?? 0) + (sessionUsage?.output ?? 0) || undefined);
+  if (rawTotal && rawTotal > peakTokensRef.current) {
+    peakTokensRef.current = rawTotal;
+  }
+  const tokenValue = peakTokensRef.current > 0 ? peakTokensRef.current : undefined;
+  const model = sessionUsage?.model;
+
+  return (
+    <div className={s.progressBlock} role="status" aria-live="polite">
+      <span className={s.thinkingDot} />
+      <span className={s.thinkingLabel}>
+        {label}{showLongHint ? "（耗时较长）" : ""}
+      </span>
+      {(tokenValue || model) ? (
+        <span className={s.thinkingMeta}>
+          {tokenValue ? <span>{formatTokens(tokenValue)} tokens</span> : null}
+          {tokenValue && model ? <span className={s.thinkingSep}>·</span> : null}
+          {model ? <span className={s.thinkingModel}>{truncateMiddle(model, 24)}</span> : null}
+        </span>
+      ) : null}
+      <span className={s.thinkingTimer}>{formatElapsedTimer(elapsed)}</span>
+    </div>
+  );
+}
+
+function ReasoningBlock({ text, streaming }: { text: string; streaming?: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className={s.reasoning}>
+      <button
+        type="button"
+        className={s.disclosure}
+        onClick={() => setOpen((value) => !value)}
+        data-open={open}
+      >
+        <span className={s.chevron}>›</span>
+        <span>{streaming ? "正在思考" : "推理过程"}</span>
+      </button>
+      {open ? <pre className={s.reasoningBody}>{text}</pre> : null}
+    </div>
+  );
+}
+
+function formatToolElapsed(ms: number | undefined): string | null {
+  if (ms === undefined || !Number.isFinite(ms) || ms <= 0) return null;
+  if (ms < 100) return "<0.1s";
+  if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`;
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return seconds ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+function ToolCard({ tool }: { tool: ChatToolItem }) {
+  const [open, setOpen] = useState(tool.status === "error");
+  const [elapsed, setElapsed] = useState(() =>
+    tool.status === "running" ? Math.max(0, Date.now() - tool.startedAt) : 0,
+  );
+
+  useEffect(() => {
+    if (tool.status === "error") setOpen(true);
+  }, [tool.status]);
+
+  useEffect(() => {
+    if (tool.status !== "running") return;
+    setElapsed(Math.max(0, Date.now() - tool.startedAt));
+    const timer = window.setInterval(() => {
+      setElapsed(Date.now() - tool.startedAt);
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [tool.startedAt, tool.status]);
+
+  const elapsedLabel = formatToolElapsed(
+    tool.status === "running"
+      ? elapsed
+      : tool.completedAt
+        ? Math.max(0, tool.completedAt - tool.startedAt)
+        : undefined,
+  );
+  const body = tool.error ?? tool.summary ?? tool.preview;
+  const hasBody = Boolean(body || tool.arguments);
+
+  return (
+    <div className={s.toolCard} data-status={tool.status}>
+      <button
+        type="button"
+        className={s.toolHeader}
+        onClick={() => setOpen((value) => !value)}
+        disabled={!hasBody}
+        data-open={open}
+      >
+        <span className={s.toolStatus} data-status={tool.status} />
+        <span className={s.toolName}>{tool.name}</span>
+        {tool.context ? (
+          <span className={s.toolContext} title={tool.context}>
+            {truncateMiddle(tool.context)}
+          </span>
+        ) : null}
+        {elapsedLabel ? <span className={s.toolElapsed}>{elapsedLabel}</span> : null}
+      </button>
+      {open && hasBody ? (
+        <div className={s.toolBody}>
+          {tool.arguments ? (
+            <pre>{JSON.stringify(tool.arguments, null, 2)}</pre>
+          ) : null}
+          {body ? <pre data-error={tool.status === "error"}>{body}</pre> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolGroupCard({ tools }: { tools: ChatToolItem[] }) {
+  const [open, setOpen] = useState(false);
+  const head = tools[0];
+  const elapsedLabel = formatToolElapsed(groupElapsedMs(tools));
+
+  return (
+    <div className={s.toolCard} data-status="done">
+      <button
+        type="button"
+        className={s.toolHeader}
+        onClick={() => setOpen((value) => !value)}
+        data-open={open}
+      >
+        <span className={s.toolStatus} data-status="done" />
+        <span className={s.toolName}>{head.name}</span>
+        {head.context ? (
+          <span className={s.toolContext} title={head.context}>
+            {truncateMiddle(head.context)}
+          </span>
+        ) : null}
+        <span className={s.toolBadge}>×{tools.length}</span>
+        {elapsedLabel ? <span className={s.toolElapsed}>{elapsedLabel}</span> : null}
+      </button>
+      {open ? (
+        <div className={s.toolGroupBody}>
+          {tools.map((tool, index) => (
+            <ToolCard key={`${tool.tool_id}-${index}`} tool={tool} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolActivity({ tools }: { tools: ChatToolItem[] }) {
+  const hasError = tools.some((tool) => tool.status === "error");
+  const hasRunning = tools.some((tool) => tool.status === "running");
+  const [open, setOpen] = useState(hasError);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (hasError) setOpen(true);
+  }, [hasError]);
+
+  useEffect(() => {
+    if (!hasRunning) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 500);
+    return () => window.clearInterval(timer);
+  }, [hasRunning]);
+
+  const summary = useMemo(() => summarizeToolActivity(tools, now), [now, tools]);
+  const elapsedLabel = formatToolElapsed(summary.elapsedMs);
+
+  return (
+    <div className={s.toolActivity} data-status={summary.status}>
+      <button
+        type="button"
+        className={s.toolActivitySummary}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        data-open={open}
+      >
+        <span className={s.toolActivityChevron}>›</span>
+        <span className={s.toolStatus} data-status={summary.status} />
+        <span className={s.toolActivityLabel}>{summary.label}</span>
+        {summary.meta ? <span className={s.toolActivityMeta}>{summary.meta}</span> : null}
+        {elapsedLabel ? <span className={s.toolElapsed}>{elapsedLabel}</span> : null}
+      </button>
+      {summary.error && !open ? (
+        <div className={s.toolActivityError}>{summary.error}</div>
+      ) : null}
+      {open ? (
+        <div className={s.toolActivityDetails}>
+          {groupConsecutiveTools(tools).map((entry, index) =>
+            entry.kind === "group" ? (
+              <ToolGroupCard key={entry.key} tools={entry.tools} />
+            ) : (
+              <ToolCard key={`${entry.tool.tool_id}-${index}`} tool={entry.tool} />
+            ),
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolChain({ tools }: { tools: ChatToolItem[] }) {
+  if (tools.length === 0) return null;
+  return (
+    <div className={s.toolChain}>
+      <ToolActivity tools={tools} />
+    </div>
+  );
+}
+
+interface MessageBlocksProps {
+  message: ChatMessage;
+  streaming: boolean;
+  turnStartedAt?: number;
+  sessionUsage?: SessionUsageResult | null;
+}
+
+function MessageBlocks({ message, streaming, turnStartedAt, sessionUsage }: MessageBlocksProps) {
+  const showReasoning = useAtomValue(showReasoningAtom);
+  const blocks = message.blocks ?? [];
+  const items: ReactNode[] = [];
+  let pendingTools: ChatToolItem[] = [];
+
+  const flushTools = (key: string) => {
+    if (pendingTools.length === 0) return;
+    items.push(<ToolChain key={key} tools={pendingTools} />);
+    pendingTools = [];
+  };
+
+  blocks.forEach((block, index) => {
+    if (block.type === "tool") {
+      pendingTools.push(block.tool);
+      return;
+    }
+
+    flushTools(`tools-${index}`);
+
+    if (block.type === "progress") {
+      return;
+    }
+
+    if (block.type === "text") {
+      items.push(
+        <div key={`text-${index}`} className={s.turnText}>
+          <MessageText text={block.text} streaming={streaming && index === blocks.length - 1} />
+        </div>,
+      );
+      return;
+    }
+
+    if (!showReasoning) return;
+
+    items.push(
+      <ReasoningBlock
+        key={`reasoning-${index}`}
+        text={block.text}
+        streaming={streaming && index === blocks.length - 1}
+      />,
+    );
+  });
+
+  flushTools("tools-last");
+
+  if (streaming) {
+    const progressPart = blocks?.find((b) => b.type === "progress");
+    items.push(
+      <ProgressBlock
+        key="tail-progress"
+        turnStartedAt={turnStartedAt}
+        sessionUsage={sessionUsage}
+        progressText={progressPart?.type === "progress" ? progressPart.text : undefined}
+      />,
+    );
+  }
+
+  return <>{items}</>;
+}
+
+function getCopyableText(message: ChatMessage): string | undefined {
+  if (message.blocks?.length) {
+    const text = message.blocks
+      .filter((block) => block.type === "text" || block.type === "reasoning")
+      .map((block) => block.text)
+      .join("\n\n")
+      .trim();
+    return text || undefined;
+  }
+  return message.text || message.reasoning;
+}
+
+const FINISH_REASON_LABEL: Record<string, string> = {
+  stop: "正常",
+  end_turn: "正常",
+  length: "上下文截断",
+  tool_use: "调用工具",
+  tool_calls: "调用工具",
+  error: "错误",
+  content_filter: "内容过滤",
+};
+
+function finishReasonRisk(reason: string | undefined): "warn" | "err" | undefined {
+  if (!reason) return undefined;
+  if (reason === "length" || reason === "content_filter") return "warn";
+  if (reason === "error") return "err";
+  return undefined;
+}
+
+function MessageStatsFooter({ stats }: { stats: AssistantMessageStats }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (wrapRef.current.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const inlineParts: string[] = [];
+  if (stats.ttftMs !== undefined) inlineParts.push(`TTFT ${formatDurationMs(stats.ttftMs)}`);
+  if (stats.durationMs !== undefined) inlineParts.push(formatDurationMs(stats.durationMs));
+  if (stats.tokensTotal !== undefined) inlineParts.push(formatTokens(stats.tokensTotal));
+  if (stats.tokPerSec !== undefined) inlineParts.push(`${formatTokPerSec(stats.tokPerSec)} tok/s`);
+
+  if (inlineParts.length === 0) return null;
+
+  const risk = finishReasonRisk(stats.finishReason);
+
+  return (
+    <span ref={wrapRef} className={s.messageStats} data-risk={risk}>
+      <span className={s.messageStatsInline}>
+        {inlineParts.map((part, idx) => (
+          <span key={idx}>{part}</span>
+        ))}
+      </span>
+      <button
+        type="button"
+        className={s.messageStatsToggle}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label="查看详细统计"
+        title="详细统计"
+      >
+        <Info size={12} strokeWidth={2} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div className={s.messageStatsPopover} role="dialog">
+          <dl>
+            {stats.model ? (
+              <>
+                <dt>模型</dt>
+                <dd className={s.messageStatsModel}>{stats.model}</dd>
+              </>
+            ) : null}
+            {stats.tokensInput !== undefined ? (
+              <>
+                <dt>输入</dt>
+                <dd>{formatTokens(stats.tokensInput)}</dd>
+              </>
+            ) : null}
+            {stats.tokensOutput !== undefined ? (
+              <>
+                <dt>输出</dt>
+                <dd>{formatTokens(stats.tokensOutput)}</dd>
+              </>
+            ) : null}
+            {stats.cacheRead !== undefined || stats.cacheWrite !== undefined ? (
+              <>
+                <dt>缓存</dt>
+                <dd>
+                  {formatTokens(stats.cacheRead)} 读 / {formatTokens(stats.cacheWrite)} 写
+                </dd>
+              </>
+            ) : null}
+            {stats.apiCalls !== undefined ? (
+              <>
+                <dt>API</dt>
+                <dd>{stats.apiCalls} 次调用</dd>
+              </>
+            ) : null}
+            {stats.costUsd !== undefined ? (
+              <>
+                <dt>成本</dt>
+                <dd>{formatCostUsd(stats.costUsd)}</dd>
+              </>
+            ) : null}
+            {stats.finishReason ? (
+              <>
+                <dt>结束</dt>
+                <dd data-risk={risk}>
+                  {FINISH_REASON_LABEL[stats.finishReason] ?? stats.finishReason}
+                </dd>
+              </>
+            ) : null}
+          </dl>
+        </div>
+      ) : null}
+    </span>
+  );
+}
+
+interface MessageBubbleProps {
+  message: ChatMessage;
+  turnStartedAt?: number;
+  sessionUsage?: SessionUsageResult | null;
+}
+
+function MessageBubble({ message, turnStartedAt, sessionUsage }: MessageBubbleProps) {
+  const showReasoning = useAtomValue(showReasoningAtom);
+  const isUser = message.role === "user";
+  const isToolOnly = message.role === "tool";
+  const isSystem = message.role === "system";
+  const streaming = message.status === "streaming";
+  const copyable = getCopyableText(message);
+  const hasBlocks = !isUser && Boolean(message.blocks?.length);
+
+  if (isToolOnly) {
+    return (
+      <div className={s.messageRow} data-role="assistant">
+        <div className={s.messageContent}>
+          <ToolChain tools={message.tools ?? []} />
+        </div>
+      </div>
+    );
+  }
+
+  if (isSystem) {
+    const text = message.text || message.reasoning || "";
+    return (
+      <div className={s.messageRow} data-role="system">
+        <div
+          className={s.systemNotice}
+          data-error={message.error ? "true" : undefined}
+          role={message.error ? "alert" : "status"}
+        >
+          <AlertTriangle
+            className={s.systemNoticeIcon}
+            size={15}
+            strokeWidth={1.75}
+            aria-hidden="true"
+          />
+          <div className={s.systemNoticeBody}>
+            {message.error ? <div className={s.systemNoticeTitle}>请求失败</div> : null}
+            <div className={s.systemNoticeText}>{text}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={s.messageRow} data-role={isUser ? "user" : "assistant"}>
+      <div className={s.messageContent}>
+        {!isUser ? <div className={s.assistantName}>Hermes</div> : null}
+        <div className={s.bubble} data-role={isUser ? "user" : "assistant"}>
+          {hasBlocks ? (
+            <MessageBlocks message={message} streaming={streaming} turnStartedAt={turnStartedAt} sessionUsage={sessionUsage} />
+          ) : (
+            <>
+              {message.text ? <MessageText text={message.text} streaming={streaming} /> : null}
+              {showReasoning && message.reasoning ? (
+                <ReasoningBlock text={message.reasoning} streaming={streaming && !message.text} />
+              ) : null}
+              {message.tools?.length ? <ToolChain tools={message.tools} /> : null}
+              {streaming ? <ProgressBlock /> : null}
+            </>
+          )}
+        </div>
+        <div className={s.messageActions}>
+          <span className={s.messageActionsControls}>
+            <span>{formatTime(message.createdAt)}</span>
+            {copyable ? (
+              <button type="button" onClick={() => copyText(copyable)}>
+                复制
+              </button>
+            ) : null}
+          </span>
+          {message.stats ? <MessageStatsFooter stats={message.stats} /> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function MessageTimeline({
+  messages,
+  loading = false,
+  statusMessage,
+  pendingApproval,
+  turnStartedAt,
+  sessionUsage,
+}: MessageTimelineProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+  const messageCountRef = useRef(0);
+  const visibleMessages = useMemo(
+    () =>
+      messages.filter(
+        (message) =>
+          message.text ||
+          message.reasoning ||
+          message.tools?.length ||
+          message.blocks?.length,
+      ),
+    [messages],
+  );
+
+  useEffect(() => {
+    const previousMessageCount = messageCountRef.current;
+    messageCountRef.current = visibleMessages.length;
+    const container = containerRef.current;
+    if (!container || !nearBottomRef.current) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: previousMessageCount === visibleMessages.length ? "auto" : "smooth",
+    });
+  }, [visibleMessages, statusMessage, pendingApproval]);
+
+  const handleScroll = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    nearBottomRef.current =
+      container.scrollHeight - container.scrollTop - container.clientHeight < 120;
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={s.scroll}
+      onScroll={handleScroll}
+      role="log"
+      aria-live="polite"
+    >
+      <div className={s.messages}>
+        {loading ? <div className={s.empty}>加载对话中...</div> : null}
+        {!loading && visibleMessages.length === 0 && !statusMessage && !pendingApproval ? (
+          <div className={s.empty}>
+            <div className={s.emptyTitle}>暂无对话记录</div>
+            <div className={s.emptySub}>发送一条消息开始继续这个任务。</div>
+          </div>
+        ) : null}
+
+        {visibleMessages.map((message, index) => {
+          const previous = visibleMessages[index - 1];
+          const showDate = !previous || formatDay(previous.createdAt) !== formatDay(message.createdAt);
+          const isLast = index === visibleMessages.length - 1;
+          return (
+            <div key={message.id}>
+              {showDate ? <div className={s.dateSeparator}>{formatDay(message.createdAt)}</div> : null}
+              <MessageBubble
+                message={message}
+                turnStartedAt={isLast ? turnStartedAt : undefined}
+                sessionUsage={isLast ? sessionUsage : undefined}
+              />
+            </div>
+          );
+        })}
+
+        {statusMessage ? <div className={s.statusMessage}>{statusMessage}</div> : null}
+        {pendingApproval}
+      </div>
+    </div>
+  );
+}

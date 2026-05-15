@@ -1,0 +1,767 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAtomValue } from "jotai";
+import { useNavigate } from "react-router-dom";
+import {
+  Archive,
+  ChevronDown,
+  Edit3,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import type { SessionSummary } from "@hermes/protocol";
+import { chatRuntimeBySessionAtom } from "@/stores/chat";
+import { useArchiveSession, useDeleteSession, useSessions } from "@/hooks/use-sessions";
+import { useGateway } from "@/hooks/use-gateway";
+import { isSessionRunning } from "@/lib/session-activity";
+import { sessionDisplayTitle } from "@/lib/session-title";
+import {
+  dayKey,
+  dayLabel,
+  formatCostCny,
+  formatTokens,
+  isToday,
+  relativeTime,
+  timeOfDay,
+} from "@/lib/format";
+import {
+  readSessionTitleOverrides,
+  subscribeSessionUiStateChanges,
+} from "@/lib/session-ui-state";
+import {
+  normalizeWorkspacePath,
+  readSessionWorkspaceMap,
+  subscribeWorkspaceChanges,
+  workspaceNameFromPath,
+} from "@/lib/workspaces";
+import { getSourceMeta, groupSourcesByCategory, type SourceMeta } from "@/lib/source-meta";
+import {
+  readPinnedSources,
+  subscribePinnedSourcesChange,
+  togglePinnedSource,
+} from "@/lib/source-pin";
+import { renameSession } from "@/lib/session-rename";
+import { TopBar, TopBarActionButton } from "@/components/top-bar/top-bar";
+import s from "./history.module.css";
+
+const PAGE_SIZE = 200;
+const INLINE_SOURCE_LIMIT = 4;
+
+type StatusFilter = "all" | "running" | "done" | "failed";
+
+const STATUS_LABELS: Record<StatusFilter, string> = {
+  all: "全部",
+  running: "运行中",
+  done: "已完成",
+  failed: "失败",
+};
+
+function shortId(id: string): string {
+  return id.slice(-6);
+}
+
+function lastActivitySec(session: SessionSummary): number {
+  return session.ended_at ?? session.started_at;
+}
+
+interface SessionStatus {
+  kind: "running" | "done" | "failed";
+  label: string;
+}
+
+function classifySession(
+  session: SessionSummary,
+  liveRunning: boolean,
+): SessionStatus {
+  if (liveRunning) return { kind: "running", label: "运行中" };
+  if (session.end_reason === "error" || session.end_reason === "interrupted") {
+    return { kind: "failed", label: session.end_reason === "interrupted" ? "已中止" : "失败" };
+  }
+  return { kind: "done", label: "已完成" };
+}
+
+interface RowMenuProps {
+  onRename: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}
+
+function RowMenu({ onRename, onArchive, onDelete, onClose }: RowMenuProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onMouseDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+  return (
+    <div ref={ref} className={s.rowMenu} role="menu">
+      <button type="button" onClick={onRename} role="menuitem">
+        <Edit3 size={13} /> 重命名
+      </button>
+      <button type="button" onClick={onArchive} role="menuitem">
+        <Archive size={13} /> 归档
+      </button>
+      <button type="button" onClick={onDelete} role="menuitem" data-tone="danger">
+        <Trash2 size={13} /> 删除
+      </button>
+    </div>
+  );
+}
+
+interface RenameModalProps {
+  value: string;
+  saving: boolean;
+  error: string;
+  onChange: (next: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}
+
+function RenameModal({ value, saving, error, onChange, onClose, onSubmit }: RenameModalProps) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !saving) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose, saving]);
+  return (
+    <div className={s.modalBackdrop} onMouseDown={() => !saving && onClose()}>
+      <form
+        className={s.renameModal}
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+      >
+        <h2>重命名会话</h2>
+        <input
+          className={s.renameInput}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          autoFocus
+          maxLength={80}
+        />
+        {error ? <div className={s.renameError}>{error}</div> : null}
+        <div className={s.renameActions}>
+          <button
+            type="button"
+            className={s.renameCancel}
+            onClick={onClose}
+            disabled={saving}
+          >
+            取消
+          </button>
+          <button type="submit" className={s.renameSubmit} disabled={saving}>
+            {saving ? "保存中…" : "保存"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+interface SourcePopoverProps {
+  open: boolean;
+  selected: string | null;
+  pinned: Set<string>;
+  counts: Map<string, number>;
+  onSelect: (key: string | null) => void;
+  onTogglePin: (key: string) => void;
+  onClose: () => void;
+}
+
+function SourcePopover({
+  open,
+  selected,
+  pinned,
+  counts,
+  onSelect,
+  onTogglePin,
+  onClose,
+}: SourcePopoverProps) {
+  const [query, setQuery] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (event: MouseEvent) => {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  const groups = useMemo(() => {
+    const sources = Array.from(counts.entries()).map(([key, count]) => ({ key, count }));
+    return groupSourcesByCategory(sources);
+  }, [counts]);
+
+  const filteredGroups = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return groups;
+    return groups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter(
+          (item) =>
+            item.label.toLowerCase().includes(q) || item.key.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [groups, query]);
+
+  if (!open) return null;
+  return (
+    <div ref={ref} className={s.popover} role="dialog">
+      <div className={s.popHead}>
+        <Search size={13} />
+        <input
+          className={s.popSearch}
+          placeholder="搜索来源…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          autoFocus
+        />
+      </div>
+      <div className={s.popBody}>
+        {filteredGroups.length === 0 ? (
+          <div className={s.popEmpty}>未找到来源</div>
+        ) : (
+          filteredGroups.map((group) => (
+            <div key={group.group} className={s.popGroup}>
+              <div className={s.popGroupLabel}>
+                {group.label} · {group.items.length}
+              </div>
+              {group.items.map((item) => {
+                const isSelected = selected === item.key;
+                const pinnedHere = pinned.has(item.key);
+                return (
+                  <div
+                    key={item.key}
+                    className={s.popRow}
+                    data-checked={isSelected ? "true" : undefined}
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      onSelect(item.key);
+                      onClose();
+                    }}
+                  >
+                    <span className={s.popName}>{item.label}</span>
+                    <button
+                      type="button"
+                      className={s.popPin}
+                      data-pinned={pinnedHere ? "true" : undefined}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onTogglePin(item.key);
+                      }}
+                      aria-label={pinnedHere ? "取消置顶" : "置顶"}
+                      title={pinnedHere ? "取消置顶" : "置顶"}
+                    >
+                      {pinnedHere ? <Pin size={11} /> : <PinOff size={11} />}
+                    </button>
+                    <span className={s.popCount}>{counts.get(item.key) ?? 0}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+      </div>
+      <div className={s.popFoot}>
+        <button
+          type="button"
+          className={s.popLink}
+          onClick={() => {
+            onSelect(null);
+            onClose();
+          }}
+        >
+          全部来源
+        </button>
+        <span className={s.popFootMeta}>
+          {selected ? getSourceMeta(selected).label : "未选择"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function HistoryRoute() {
+  const navigate = useNavigate();
+  const runtimeBySession = useAtomValue(chatRuntimeBySessionAtom);
+  const { data, isLoading, isError } = useSessions(PAGE_SIZE, 0);
+  const archiveSession = useArchiveSession();
+  const deleteSession = useDeleteSession();
+  const { setSessionTitle, resumeSession } = useGateway();
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [renamingSession, setRenamingSession] = useState<SessionSummary | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
+
+  const [titleOverrides, setTitleOverrides] = useState(readSessionTitleOverrides);
+  const [workspaceMap, setWorkspaceMap] = useState(readSessionWorkspaceMap);
+  const [pinnedSources, setPinnedSources] = useState<Set<string>>(readPinnedSources);
+
+  useEffect(
+    () =>
+      subscribeSessionUiStateChanges(() =>
+        setTitleOverrides(readSessionTitleOverrides()),
+      ),
+    [],
+  );
+  useEffect(
+    () => subscribeWorkspaceChanges(() => setWorkspaceMap(readSessionWorkspaceMap())),
+    [],
+  );
+  useEffect(
+    () => subscribePinnedSourcesChange(() => setPinnedSources(readPinnedSources())),
+    [],
+  );
+
+  const sessions = useMemo(
+    () =>
+      (data?.sessions ?? []).map((session) => {
+        const overridden = titleOverrides[session.id];
+        return overridden ? { ...session, title: overridden } : session;
+      }),
+    [data?.sessions, titleOverrides],
+  );
+
+  // status counts (across all sessions, ignoring source/search filters)
+  const statusCounts = useMemo(() => {
+    const counts: Record<StatusFilter, number> = { all: 0, running: 0, done: 0, failed: 0 };
+    for (const session of sessions) {
+      counts.all += 1;
+      const live = isSessionRunning(session, runtimeBySession);
+      const status = classifySession(session, live).kind;
+      counts[status] += 1;
+    }
+    return counts;
+  }, [runtimeBySession, sessions]);
+
+  // source counts (across sessions matching status + search, ignoring source filter)
+  const sourceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    const q = searchQuery.trim().toLowerCase();
+    for (const session of sessions) {
+      const live = isSessionRunning(session, runtimeBySession);
+      const status = classifySession(session, live).kind;
+      if (statusFilter !== "all" && status !== statusFilter) continue;
+      if (q) {
+        const haystack =
+          `${session.title ?? ""} ${session.preview ?? ""} ${session.id}`.toLowerCase();
+        if (!haystack.includes(q)) continue;
+      }
+      const key = getSourceMeta(session.source).key;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [runtimeBySession, searchQuery, sessions, statusFilter]);
+
+  // inline sources: pinned first (sorted by count), then top remaining by count, capped to INLINE_SOURCE_LIMIT
+  const inlineSourceKeys = useMemo(() => {
+    const entries = Array.from(sourceCounts.entries());
+    const pinnedEntries = entries
+      .filter(([key]) => pinnedSources.has(key))
+      .sort((a, b) => b[1] - a[1]);
+    const otherEntries = entries
+      .filter(([key]) => !pinnedSources.has(key))
+      .sort((a, b) => b[1] - a[1]);
+    const ordered = [...pinnedEntries, ...otherEntries];
+    return ordered.slice(0, INLINE_SOURCE_LIMIT).map(([key]) => key);
+  }, [pinnedSources, sourceCounts]);
+
+  const overflowCount = Math.max(0, sourceCounts.size - inlineSourceKeys.length);
+
+  // visible sessions after all filters, with day grouping
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const matches: SessionSummary[] = [];
+    for (const session of sessions) {
+      const live = isSessionRunning(session, runtimeBySession);
+      const status = classifySession(session, live).kind;
+      if (statusFilter !== "all" && status !== statusFilter) continue;
+      if (selectedSource) {
+        const sourceKey = getSourceMeta(session.source).key;
+        if (sourceKey !== selectedSource) continue;
+      }
+      if (q) {
+        const haystack =
+          `${session.title ?? ""} ${session.preview ?? ""} ${session.id}`.toLowerCase();
+        if (!haystack.includes(q)) continue;
+      }
+      matches.push(session);
+    }
+    matches.sort((a, b) => lastActivitySec(b) - lastActivitySec(a));
+    return matches;
+  }, [runtimeBySession, searchQuery, selectedSource, sessions, statusFilter]);
+
+  const dayGroups = useMemo(() => {
+    const groups = new Map<string, { label: string; sessions: SessionSummary[]; sortKey: number }>();
+    for (const session of filtered) {
+      const ts = lastActivitySec(session);
+      const key = dayKey(ts);
+      const existing = groups.get(key);
+      if (existing) {
+        existing.sessions.push(session);
+      } else {
+        groups.set(key, { label: dayLabel(ts), sessions: [session], sortKey: ts });
+      }
+    }
+    return Array.from(groups.values()).sort((a, b) => b.sortKey - a.sortKey);
+  }, [filtered]);
+
+  const onTogglePinSource = useCallback((key: string) => {
+    setPinnedSources(togglePinnedSource(key));
+  }, []);
+
+  const goSession = useCallback(
+    (session: SessionSummary) => {
+      navigate(`/tasks/${session.id}`);
+    },
+    [navigate],
+  );
+
+  const startRename = useCallback((session: SessionSummary) => {
+    setOpenMenuId(null);
+    setRenamingSession(session);
+    setRenameValue((session.title || session.preview || session.id).replace(/\s+/g, " ").trim());
+    setRenameError("");
+  }, []);
+
+  const closeRename = useCallback(() => {
+    setRenamingSession(null);
+    setRenameValue("");
+    setRenameError("");
+  }, []);
+
+  const submitRename = useCallback(async () => {
+    const session = renamingSession;
+    if (!session) return;
+    const title = renameValue.trim();
+    if (!title) {
+      setRenameError("请输入会话名称");
+      return;
+    }
+    setRenameSaving(true);
+    setRenameError("");
+    try {
+      await renameSession(session.id, title, { setSessionTitle, resumeSession });
+      closeRename();
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : "重命名失败");
+    } finally {
+      setRenameSaving(false);
+    }
+  }, [closeRename, renameValue, renamingSession, resumeSession, setSessionTitle]);
+
+  const handleArchive = useCallback(
+    (session: SessionSummary) => {
+      setOpenMenuId(null);
+      archiveSession.mutate(session.id);
+    },
+    [archiveSession],
+  );
+
+  const handleDelete = useCallback(
+    (session: SessionSummary) => {
+      setOpenMenuId(null);
+      const confirmed = window.confirm(
+        `确认删除会话「${sessionDisplayTitle(session)}」？此操作不可撤销。`,
+      );
+      if (!confirmed) return;
+      deleteSession.mutate(session.id);
+    },
+    [deleteSession],
+  );
+
+  const totalTokens = useMemo(
+    () =>
+      filtered.reduce(
+        (sum, session) => sum + (session.input_tokens ?? 0) + (session.output_tokens ?? 0),
+        0,
+      ),
+    [filtered],
+  );
+
+  const todayCostUsd = useMemo(() => {
+    let usd = 0;
+    for (const session of sessions) {
+      if (!isToday(lastActivitySec(session))) continue;
+      usd += session.estimated_cost_usd ?? 0;
+    }
+    return usd;
+  }, [sessions]);
+
+  return (
+    <main className={s.page}>
+      <TopBar
+        title="对话历史"
+        sub={isLoading ? "加载中…" : `${filtered.length} / ${sessions.length} 个会话`}
+        right={
+          <>
+            <span className={s.headerStat}>
+              今日 <span className={s.headerStatValue}>{formatCostCny(todayCostUsd)}</span>
+            </span>
+            <TopBarActionButton onClick={() => navigate("/new")}>
+              <Plus size={13} />
+              新对话
+            </TopBarActionButton>
+          </>
+        }
+      />
+
+      <div className={s.filters}>
+        <div className={s.seg} role="tablist" aria-label="状态筛选">
+          {(Object.keys(STATUS_LABELS) as StatusFilter[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={statusFilter === key}
+              className={s.segItem}
+              data-active={statusFilter === key ? "true" : undefined}
+              onClick={() => setStatusFilter(key)}
+            >
+              {STATUS_LABELS[key]}
+              <span className={s.segCount}>{statusCounts[key]}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className={s.segAnchor}>
+          <div className={s.seg} role="radiogroup" aria-label="来源筛选">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selectedSource === null}
+              className={s.segItem}
+              data-active={selectedSource === null ? "true" : undefined}
+              onClick={() => setSelectedSource(null)}
+            >
+              全部
+            </button>
+            {inlineSourceKeys.map((key) => {
+              const meta = getSourceMeta(key);
+              const active = selectedSource === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  className={s.segItem}
+                  data-active={active ? "true" : undefined}
+                  onClick={() => setSelectedSource(active ? null : key)}
+                >
+                  {meta.label}
+                  <span className={s.segCount}>{sourceCounts.get(key) ?? 0}</span>
+                </button>
+              );
+            })}
+            {overflowCount > 0 ? (
+              <button
+                type="button"
+                className={s.segItem}
+                data-active={popoverOpen ? "true" : undefined}
+                onClick={() => setPopoverOpen((prev) => !prev)}
+              >
+                更多
+                <span className={s.segBadge}>+{overflowCount}</span>
+                <ChevronDown size={12} className={popoverOpen ? s.chevOpen : undefined} />
+              </button>
+            ) : null}
+          </div>
+          <SourcePopover
+            open={popoverOpen}
+            selected={selectedSource}
+            pinned={pinnedSources}
+            counts={sourceCounts}
+            onSelect={setSelectedSource}
+            onTogglePin={onTogglePinSource}
+            onClose={() => setPopoverOpen(false)}
+          />
+        </div>
+
+        <div className={s.searchBox}>
+          <Search size={13} />
+          <input
+            type="search"
+            placeholder="搜索标题与会话 ID…"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className={s.scroll}>
+        {isError ? (
+          <div className={s.errorState}>无法加载会话列表，请检查 Dashboard 服务。</div>
+        ) : isLoading ? (
+          <div className={s.emptyState}>加载会话中…</div>
+        ) : dayGroups.length === 0 ? (
+          <div className={s.emptyState}>
+            {sessions.length === 0 ? "暂无会话" : "没有匹配当前筛选的会话"}
+          </div>
+        ) : (
+          dayGroups.map((group, groupIdx) => {
+            const dayCostUsd = group.sessions.reduce(
+              (sum, session) => sum + (session.estimated_cost_usd ?? 0),
+              0,
+            );
+            const dayTokens = group.sessions.reduce(
+              (sum, session) =>
+                sum + (session.input_tokens ?? 0) + (session.output_tokens ?? 0),
+              0,
+            );
+            return (
+              <section key={group.label + group.sortKey} className={s.dayGroup}>
+                <div className={s.dayHead}>
+                  <span className={s.dayLabel}>{group.label}</span>
+                  <span className={s.dayCount}>{group.sessions.length} 个会话</span>
+                  <span className={s.dayTotals}>
+                    {formatCostCny(dayCostUsd)} · {formatTokens(dayTokens)} tokens
+                  </span>
+                </div>
+
+                {groupIdx === 0 ? (
+                  <div className={s.colHead} aria-hidden="true">
+                    <span>ID</span>
+                    <span>标题</span>
+                    <span>来源</span>
+                    <span>模型</span>
+                    <span>工作区</span>
+                    <span>更新</span>
+                    <span className={s.alignRight}>花费</span>
+                    <span />
+                  </div>
+                ) : null}
+
+                {group.sessions.map((session) => {
+                  const live = isSessionRunning(session, runtimeBySession);
+                  const status = classifySession(session, live);
+                  const meta = getSourceMeta(session.source);
+                  const workspacePath = normalizeWorkspacePath(workspaceMap[session.id]);
+                  const workspaceName = workspacePath
+                    ? workspaceNameFromPath(workspacePath)
+                    : "";
+                  const ts = lastActivitySec(session);
+                  const updatedDisplay =
+                    isToday(ts) && status.kind === "running"
+                      ? `${timeOfDay(ts)} 启动`
+                      : isToday(ts)
+                        ? timeOfDay(ts)
+                        : relativeTime(ts);
+                  return (
+                    <div
+                      key={session.id}
+                      className={s.convRow}
+                      data-status={status.kind}
+                      onClick={() => goSession(session)}
+                    >
+                      <span className={s.cellId}>{shortId(session.id)}</span>
+                      <span className={s.cellTitle}>
+                        {status.kind === "running" ? (
+                          <span className={s.dotLive} aria-hidden />
+                        ) : status.kind === "failed" ? (
+                          <span className={s.dotFail} aria-hidden />
+                        ) : null}
+                        <span className={s.titleText}>{sessionDisplayTitle(session)}</span>
+                      </span>
+                      <SourceBadge meta={meta} />
+                      <span className={s.cellMono}>{session.model || "—"}</span>
+                      <span className={s.cellMono} title={workspacePath || undefined}>
+                        {workspaceName || "—"}
+                      </span>
+                      <span className={s.cellTimestamp}>{updatedDisplay}</span>
+                      <span className={`${s.cellMono} ${s.alignRight}`}>
+                        {formatCostCny(session.estimated_cost_usd)}
+                      </span>
+                      <span
+                        className={s.cellMore}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenMenuId((prev) => (prev === session.id ? null : session.id));
+                        }}
+                      >
+                        <MoreHorizontal size={14} />
+                        {openMenuId === session.id ? (
+                          <RowMenu
+                            onRename={() => startRename(session)}
+                            onArchive={() => handleArchive(session)}
+                            onDelete={() => handleDelete(session)}
+                            onClose={() => setOpenMenuId(null)}
+                          />
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })
+        )}
+      </div>
+
+      <div className={s.foot}>
+        <span>
+          共 {filtered.length} 个会话 · {formatTokens(totalTokens)} tokens
+        </span>
+        {data && data.total > sessions.length ? (
+          <span className={s.footNote}>展示前 {sessions.length} 条 / 共 {data.total} 条</span>
+        ) : null}
+      </div>
+
+      {renamingSession ? (
+        <RenameModal
+          value={renameValue}
+          saving={renameSaving}
+          error={renameError}
+          onChange={(next) => {
+            setRenameValue(next);
+            if (renameError) setRenameError("");
+          }}
+          onClose={closeRename}
+          onSubmit={submitRename}
+        />
+      ) : null}
+    </main>
+  );
+}
+
+function SourceBadge({ meta }: { meta: SourceMeta }) {
+  return (
+    <span className={s.sourceChip} data-tone={meta.tone}>
+      {meta.label}
+    </span>
+  );
+}
