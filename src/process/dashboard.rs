@@ -39,6 +39,20 @@ pub async fn probe_dashboard(api_base_url: &str) -> bool {
 /// Check if the dashboard at the given URL supports the /api/upload endpoint
 /// (indicates our fork/patched version).
 async fn dashboard_supports_uploads(api_base_url: &str) -> bool {
+    has_openapi_path(api_base_url, "/api/upload").await
+}
+
+/// Check whether the dashboard has the P-009 SSE/POST routes
+/// (`/api/v2/events` + `/api/v2/rpc`). If absent, the desktop's default
+/// SSE transport will fail with "SSE closed during connect" — see
+/// issue #10. Caller should log an actionable warning, not refuse to
+/// start, so users can still fall back to WebSocket transport via
+/// `localStorage.HERMES_TRANSPORT = "ws"`.
+pub async fn dashboard_supports_sse(api_base_url: &str) -> bool {
+    has_openapi_path(api_base_url, "/api/v2/events").await
+}
+
+async fn has_openapi_path(api_base_url: &str, path: &str) -> bool {
     let url = format!("{}/openapi.json", api_base_url);
     let client = reqwest::Client::builder()
         .timeout(PROBE_TIMEOUT)
@@ -49,7 +63,7 @@ async fn dashboard_supports_uploads(api_base_url: &str) -> bool {
         Ok(res) if res.status().is_success() => {
             if let Ok(data) = res.json::<serde_json::Value>().await {
                 data.get("paths")
-                    .and_then(|p| p.get("/api/upload"))
+                    .and_then(|p| p.get(path))
                     .is_some()
             } else {
                 false

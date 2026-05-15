@@ -166,6 +166,26 @@ fn main() {
                 }
             };
 
+            // 4b. P-009 probe: the desktop's default transport is SSE
+            // (gateway-client.ts:572). If the dashboard lacks `/api/v2/events`
+            // the UI will hit "SSE closed during connect" the moment it tries
+            // to send a message. Surface a clear warning at startup so users
+            // and bug reports know the root cause rather than chasing the
+            // opaque error. See issue #10 P2.
+            let supports_sse = tauri::async_runtime::block_on(
+                dashboard::dashboard_supports_sse(&handle.api_base_url),
+            );
+            if !supports_sse {
+                log::error!(
+                    "Dashboard at {} lacks /api/v2/events (P-009 patch missing). \
+                     SSE transport will fail; set HERMES_TRANSPORT=ws in the \
+                     webview localStorage as a workaround, or upgrade the agent \
+                     to a hermes-agent-cn build with the P-009 patch applied. \
+                     See https://github.com/Eynzof/hermes-cn-desktop-v2/issues/10",
+                    handle.api_base_url
+                );
+            }
+
             // 5. Fetch session token
             let env_token = std::env::var("HERMES_DESKTOP_SESSION_TOKEN").ok();
             let session_token = match env_token {

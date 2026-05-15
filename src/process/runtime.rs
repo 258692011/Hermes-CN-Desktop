@@ -220,34 +220,66 @@ pub fn read_current_record() -> Option<RuntimeInstallRecord> {
     Some(record)
 }
 
+// Compile-time defaults — populated by setting the matching env vars in
+// the build environment (e.g. `cargo build` invoked by the release CI
+// with HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT=https://github.com/...).
+// Runtime env vars always take precedence; these only kick in when the
+// runtime env is empty, so dev builds with no env set behave exactly as
+// before (no auto-install, no signature verify, fall through to PATH
+// `hermes`). See issue #10 P2.
+const BAKED_MANIFEST_BASE_URL: Option<&str> =
+    option_env!("HERMES_RUNTIME_UPDATE_BASE_URL_DEFAULT");
+const BAKED_MANIFEST_CHANNEL: Option<&str> =
+    option_env!("HERMES_RUNTIME_UPDATE_CHANNEL_DEFAULT");
+const BAKED_PUBLIC_KEY_PEM: Option<&str> =
+    option_env!("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM_DEFAULT");
+
 fn configured_manifest_url() -> Option<String> {
+    // 1. Fully-formed URL via runtime env (highest precedence)
     if let Ok(explicit) = std::env::var("HERMES_RUNTIME_UPDATE_MANIFEST_URL") {
         let trimmed = explicit.trim().to_string();
         if !trimmed.is_empty() {
             return Some(trimmed);
         }
     }
-    let base = std::env::var("HERMES_RUNTIME_UPDATE_BASE_URL").ok()?;
+
+    // 2. Construct from base URL — runtime env wins, then compile-time default.
+    let base = std::env::var("HERMES_RUNTIME_UPDATE_BASE_URL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| BAKED_MANIFEST_BASE_URL.map(|s| s.to_string()))?;
     let base = base.trim();
     if base.is_empty() {
         return None;
     }
     let channel = std::env::var("HERMES_RUNTIME_UPDATE_CHANNEL")
-        .unwrap_or_else(|_| DEFAULT_CHANNEL.to_string());
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| BAKED_MANIFEST_CHANNEL.map(|s| s.to_string()))
+        .unwrap_or_else(|| DEFAULT_CHANNEL.to_string());
     let base = if base.ends_with('/') { base.to_string() } else { format!("{}/", base) };
     Some(format!("{}{}/{}-{}.json", base, channel, current_platform(), current_arch()))
 }
 
 fn configured_public_key() -> Option<String> {
+    // 1. PEM via runtime env (highest precedence)
     if let Ok(direct) = std::env::var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_PEM") {
         let pem = direct.trim().replace("\\n", "\n");
         if !pem.is_empty() {
             return Some(pem);
         }
     }
+    // 2. PEM from a file path via runtime env
     if let Ok(file) = std::env::var("HERMES_RUNTIME_UPDATE_PUBLIC_KEY_FILE") {
         if Path::new(&file).is_file() {
             return fs::read_to_string(&file).ok();
+        }
+    }
+    // 3. Compile-time embedded PEM (baked into release builds via CI)
+    if let Some(baked) = BAKED_PUBLIC_KEY_PEM {
+        let pem = baked.trim().replace("\\n", "\n");
+        if !pem.is_empty() {
+            return Some(pem);
         }
     }
     None
