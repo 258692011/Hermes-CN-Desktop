@@ -1,0 +1,47 @@
+name: "Requirement / Spec"
+description: "产品需求或技术规格"
+labels: ["requirement"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: "业务背景和动机"
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Specification
+      description: "详细规格描述"
+      placeholder: |
+        ### 功能点 1
+        描述...
+
+        ### 功能点 2
+        描述...
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: "技术约束、兼容性要求、性能指标等"
+  - type: textarea
+    id: files
+    attributes:
+      label: Files Likely Involved
+      description: "可能涉及的文件路径"
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: "验收标准"
+      placeholder: |
+        - [ ] 条件 1
+        - [ ] 条件 2
+  - type: textarea
+    id: milestones
+    attributes:
+      label: Milestone / Deadline
+      description: "关联的里程碑或截止日期"

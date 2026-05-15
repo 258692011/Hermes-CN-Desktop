@@ -1,0 +1,47 @@
+name: "Feature Request"
+description: "新功能或增强请求"
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请尽量写清楚背景和验收标准，方便人和 agent 理解。
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: "为什么需要这个功能？解决什么问题？"
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: "具体需求，每条一行"
+      placeholder: |
+        - 支持 xxx
+        - 当 yyy 时，应该 zzz
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files Likely Involved
+      description: "可能涉及的文件路径（帮助 agent 定位代码）"
+      placeholder: |
+        - `web/src/lib/transport.ts`
+        - `src/commands/api_proxy.rs`
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: "怎样算做完？用 checkbox 列出"
+      placeholder: |
+        - [ ] 条件 1
+        - [ ] 条件 2
+  - type: textarea
+    id: test-plan
+    attributes:
+      label: Test Plan
+      description: "如何验证？"
+      placeholder: "手动测试步骤 / 需要添加的单元测试"

@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use regex::Regex;
 
+use crate::error::AppError;
 use crate::state::DashboardHandle;
 
 const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(25);
@@ -137,7 +138,7 @@ fn resolve_hermes_command() -> (String, Vec<String>) {
 }
 
 /// Spawn the hermes dashboard subprocess.
-fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Child, String> {
+fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Child, AppError> {
     let (program, mut prefix_args) = resolve_hermes_command();
 
     let api_args = vec![
@@ -169,7 +170,7 @@ fn spawn_dashboard(options: &EnsureDashboardOptions) -> Result<std::process::Chi
     }
 
     cmd.spawn()
-        .map_err(|e| format!("Failed to spawn hermes dashboard: {}", e))
+        .map_err(|e| AppError::DashboardStartup(e.to_string()))
 }
 
 /// Wait until the dashboard is ready (responds to /api/status) or timeout.
@@ -198,7 +199,7 @@ async fn wait_for_dashboard(
 /// primary port is occupied by an incompatible dashboard.
 pub async fn ensure_hermes_dashboard(
     options: EnsureDashboardOptions,
-) -> Result<DashboardHandle, String> {
+) -> Result<DashboardHandle, AppError> {
     let api_base_url = dashboard_base_url(&options.host, options.port);
 
     // Check if there's already a compatible dashboard running
@@ -247,11 +248,11 @@ pub async fn ensure_hermes_dashboard(
             break;
         }
         if !found {
-            return Err(format!(
+            return Err(AppError::DashboardStartup(format!(
                 "No available port from {} to {}",
                 options.port,
                 options.port + DASHBOARD_PORT_FALLBACK_LIMIT
-            ));
+            )));
         }
     }
 
@@ -265,11 +266,11 @@ pub async fn ensure_hermes_dashboard(
         if let Some(ref mut c) = child_opt {
             let _ = c.kill();
         }
-        return Err(format!(
-            "Dashboard did not become ready at {} within {}s",
+        return Err(AppError::DashboardStartup(format!(
+            "Not ready at {} within {}s",
             child_url,
             DASHBOARD_READY_TIMEOUT.as_secs()
-        ));
+        )));
     }
 
     log::info!("Dashboard started at {}", child_url);

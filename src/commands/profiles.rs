@@ -14,6 +14,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::error::AppError;
+
 use crate::process::dashboard;
 use crate::state::AppState;
 
@@ -89,7 +91,7 @@ fn host_and_port() -> (String, u16) {
 pub async fn switch_profile(
     input: SwitchProfileInput,
     state: State<'_, AppState>,
-) -> Result<SwitchProfileResult, String> {
+) -> Result<SwitchProfileResult, AppError> {
     let name = input.name.trim().to_string();
 
     // Validate name
@@ -104,7 +106,7 @@ pub async fn switch_profile(
 
     // Check preconditions
     let (base, current_profile, owns_process, previous_home) = {
-        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let inner = state.inner.lock()?;
 
         if !inner
             .dashboard_handle
@@ -158,7 +160,7 @@ pub async fn switch_profile(
 
     // Set in-flight flag
     {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.switch_profile_in_flight = true;
     }
 
@@ -174,7 +176,7 @@ pub async fn switch_profile(
 
     // Clear in-flight flag
     {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.switch_profile_in_flight = false;
     }
 
@@ -300,7 +302,7 @@ async fn try_recover_previous(
     host: &str,
     port: u16,
     previous_home: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let handle = dashboard::ensure_hermes_dashboard(dashboard::EnsureDashboardOptions {
         host: host.to_string(),
         port,
@@ -315,7 +317,7 @@ async fn try_recover_previous(
     };
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
 
-    let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+    let mut inner = state.inner.lock()?;
     inner.api_base_url = handle.api_base_url.clone();
     inner.gateway_url = gateway_url;
     inner.session_token = token;

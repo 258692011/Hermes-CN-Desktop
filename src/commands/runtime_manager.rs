@@ -5,21 +5,23 @@
 
 use tauri::State;
 
+use crate::error::AppError;
+
 use crate::process::dashboard;
 use crate::process::runtime;
 use crate::state::AppState;
 
 #[tauri::command]
-pub fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, String> {
+pub fn runtime_info(state: State<'_, AppState>) -> Result<runtime::RuntimeInfo, AppError> {
     let last_error = {
-        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let inner = state.inner.lock()?;
         inner.last_runtime_error.clone()
     };
     Ok(runtime::get_runtime_info(last_error))
 }
 
 #[tauri::command]
-pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult, String> {
+pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult, AppError> {
     Ok(runtime::check_runtime_update().await)
 }
 
@@ -27,18 +29,18 @@ pub async fn runtime_check_update() -> Result<runtime::RuntimeUpdateCheckResult,
 #[tauri::command]
 pub async fn runtime_install_update(
     state: State<'_, AppState>,
-) -> Result<runtime::RuntimeInstallUpdateResult, String> {
+) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
     let result = runtime::install_runtime_update(None).await;
     if !result.ok {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.last_runtime_error = result.error.clone();
         return Ok(result);
     }
 
     // Restart dashboard after successful install
     if let Err(e) = restart_dashboard(&state).await {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-        inner.last_runtime_error = Some(e.clone());
+        let mut inner = state.inner.lock()?;
+        inner.last_runtime_error = Some(e.to_string());
         return Ok(runtime::RuntimeInstallUpdateResult {
             ok: false,
             installed: result.installed,
@@ -48,7 +50,7 @@ pub async fn runtime_install_update(
     }
 
     {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.last_runtime_error = None;
     }
     Ok(result)
@@ -58,17 +60,17 @@ pub async fn runtime_install_update(
 #[tauri::command]
 pub async fn runtime_rollback(
     state: State<'_, AppState>,
-) -> Result<runtime::RuntimeInstallUpdateResult, String> {
+) -> Result<runtime::RuntimeInstallUpdateResult, AppError> {
     let result = runtime::rollback_runtime();
     if !result.ok {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.last_runtime_error = result.error.clone();
         return Ok(result);
     }
 
     if let Err(e) = restart_dashboard(&state).await {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
-        inner.last_runtime_error = Some(e.clone());
+        let mut inner = state.inner.lock()?;
+        inner.last_runtime_error = Some(e.to_string());
         return Ok(runtime::RuntimeInstallUpdateResult {
             ok: false,
             installed: result.installed,
@@ -78,16 +80,16 @@ pub async fn runtime_rollback(
     }
 
     {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.last_runtime_error = None;
     }
     Ok(result)
 }
 
 /// Stop the current dashboard and spawn a new one.
-async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), String> {
+async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), AppError> {
     let (host, port, hermes_home) = {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         // Stop existing
         if let Some(ref mut handle) = inner.dashboard_handle {
             handle.stop();
@@ -121,7 +123,7 @@ async fn restart_dashboard(state: &State<'_, AppState>) -> Result<(), String> {
     let gateway_url = dashboard::build_gateway_url(&handle.api_base_url, token.as_deref());
 
     {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.api_base_url = handle.api_base_url.clone();
         inner.gateway_url = gateway_url;
         inner.session_token = token;

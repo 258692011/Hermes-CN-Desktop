@@ -1,0 +1,53 @@
+name: "Bug Report"
+description: "报告一个 bug"
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: "什么坏了？"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: "复现步骤"
+      placeholder: |
+        1. 打开 xxx
+        2. 点击 yyy
+        3. 出现 zzz
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: "期望的正确行为"
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: "实际发生了什么"
+  - type: textarea
+    id: files
+    attributes:
+      label: Files Likely Involved
+      description: "可能涉及的文件路径"
+      placeholder: |
+        - `src/commands/sse_proxy.rs`
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Screenshots
+      description: "相关日志、截图或错误信息"

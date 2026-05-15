@@ -13,6 +13,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::error::AppError;
 use crate::session_archive;
 use crate::session_log;
 use crate::state::AppState;
@@ -69,13 +70,13 @@ fn url_path(path: &str) -> String {
 pub async fn api_request(
     input: ApiRequestInput,
     state: State<'_, AppState>,
-) -> Result<ApiRequestResult, String> {
+) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
     let path = &input.path;
     let url_p = url_path(path);
 
     let (api_base_url, session_token, hermes_home) = {
-        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let inner = state.inner.lock()?;
         (
             inner.api_base_url.clone(),
             inner.session_token.clone(),
@@ -113,10 +114,10 @@ pub async fn api_request(
     // 4. Proxy to dashboard
     let full_url = if path.starts_with("http://") || path.starts_with("https://") {
         // Validate same origin
-        let base = url::Url::parse(&api_base_url).map_err(|e| e.to_string())?;
-        let target = url::Url::parse(path).map_err(|e| e.to_string())?;
+        let base = url::Url::parse(&api_base_url)?;
+        let target = url::Url::parse(path)?;
         if target.origin() != base.origin() {
-            return Err(format!("Refusing request outside {}", base.origin().ascii_serialization()));
+            return Err(AppError::OriginViolation(base.origin().ascii_serialization()));
         }
         path.to_string()
     } else {
@@ -156,7 +157,7 @@ pub async fn api_request(
         req = req.body(body.clone());
     }
 
-    let res = req.send().await.map_err(|e| e.to_string())?;
+    let res = req.send().await?;
     let status = res.status().as_u16();
     let status_text = res.status().canonical_reason().unwrap_or("").to_string();
     let res_headers: HashMap<String, String> = res
@@ -185,13 +186,13 @@ pub async fn api_request(
 
 /// Proxy an HTTP request to an arbitrary external URL (15s timeout).
 #[tauri::command]
-pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult, String> {
+pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
 
     let client = reqwest::Client::builder()
         .timeout(EXTERNAL_TIMEOUT)
         .build()
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let mut req = client.request(
         method.parse().unwrap_or(reqwest::Method::GET),
@@ -253,17 +254,17 @@ pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult
 pub async fn upload_file(
     input: UploadFileInput,
     state: State<'_, AppState>,
-) -> Result<ApiRequestResult, String> {
+) -> Result<ApiRequestResult, AppError> {
     use base64::Engine;
 
     let (api_base_url, session_token) = {
-        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let inner = state.inner.lock()?;
         (inner.api_base_url.clone(), inner.session_token.clone())
     };
 
     let file_bytes = base64::engine::general_purpose::STANDARD
         .decode(&input.data)
-        .map_err(|e| format!("Invalid base64 data: {}", e))?;
+        .map_err(|e| AppError::InvalidRequest(format!("Invalid base64: {}", e)))?;
 
     let mime_type = input
         .r#type
@@ -273,7 +274,7 @@ pub async fn upload_file(
     let file_part = reqwest::multipart::Part::bytes(file_bytes)
         .file_name(input.name.clone())
         .mime_str(mime_type)
-        .map_err(|e| e.to_string())?;
+        ?;
 
     let form = reqwest::multipart::Form::new()
         .text("session_id", input.session_id)
@@ -289,7 +290,7 @@ pub async fn upload_file(
             .header("X-Hermes-Session-Token", token.as_str());
     }
 
-    let res = req.send().await.map_err(|e| e.to_string())?;
+    let res = req.send().await?;
     let status = res.status().as_u16();
     let status_text = res.status().canonical_reason().unwrap_or("").to_string();
     let headers: HashMap<String, String> = res

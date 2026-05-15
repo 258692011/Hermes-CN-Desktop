@@ -1,12 +1,8 @@
-// Native file/directory dialog commands + workspace helpers.
-//
-// Replaces the Electron ipcMain handlers for pickFiles, pickDirectory,
-// createWorkspaceProject, and openWorkspacePath.
-
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::Manager;
+
+use crate::error::{AppError, AppResult};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,9 +25,8 @@ pub struct SimpleApiResult {
     pub message: Option<String>,
 }
 
-/// Open a native file picker dialog (multi-select).
 #[tauri::command]
-pub async fn pick_files(app: tauri::AppHandle) -> Result<FilePickerResult, String> {
+pub async fn pick_files(app: tauri::AppHandle) -> AppResult<FilePickerResult> {
     use tauri_plugin_dialog::DialogExt;
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -56,12 +51,11 @@ pub async fn pick_files(app: tauri::AppHandle) -> Result<FilePickerResult, Strin
             let _ = tx.send(result);
         });
 
-    rx.await.map_err(|e| e.to_string())
+    rx.await.map_err(|e| AppError::Internal(e.to_string()))
 }
 
-/// Open a native directory picker dialog.
 #[tauri::command]
-pub async fn pick_directory(app: tauri::AppHandle) -> Result<FilePickerResult, String> {
+pub async fn pick_directory(app: tauri::AppHandle) -> AppResult<FilePickerResult> {
     use tauri_plugin_dialog::DialogExt;
 
     let (tx, rx) = tokio::sync::oneshot::channel();
@@ -86,13 +80,11 @@ pub async fn pick_directory(app: tauri::AppHandle) -> Result<FilePickerResult, S
             let _ = tx.send(result);
         });
 
-    rx.await.map_err(|e| e.to_string())
+    rx.await.map_err(|e| AppError::Internal(e.to_string()))
 }
 
-/// Create a new project directory in the user's Documents folder.
-/// Returns the path of the created directory.
 #[tauri::command]
-pub fn create_workspace_project() -> Result<FilePickerResult, String> {
+pub fn create_workspace_project() -> AppResult<FilePickerResult> {
     let documents = dirs::document_dir()
         .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."));
@@ -120,7 +112,7 @@ pub fn create_workspace_project() -> Result<FilePickerResult, String> {
         ));
     }
 
-    fs::create_dir_all(&path).map_err(|e| format!("Failed to create project dir: {}", e))?;
+    fs::create_dir_all(&path)?;
 
     Ok(FilePickerResult {
         canceled: false,
@@ -128,15 +120,14 @@ pub fn create_workspace_project() -> Result<FilePickerResult, String> {
     })
 }
 
-/// Open a path in the OS file manager (Finder/Explorer).
 #[tauri::command]
-pub async fn open_workspace_path(input: WorkspacePathInput) -> Result<SimpleApiResult, String> {
+pub async fn open_workspace_path(input: WorkspacePathInput) -> AppResult<SimpleApiResult> {
     let path = input.path.trim();
     if path.is_empty() {
-        return Err("Empty path".to_string());
+        return Err(AppError::InvalidRequest("Empty path".to_string()));
     }
 
-    open::that(path).map_err(|e| format!("Failed to open path: {}", e))?;
+    open::that(path).map_err(|e| AppError::FileError(format!("Failed to open: {}", e)))?;
 
     Ok(SimpleApiResult {
         ok: true,

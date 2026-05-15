@@ -1,11 +1,7 @@
-// Gateway and runtime config commands.
-//
-// get_runtime_config: returns the full runtime config to the frontend on startup.
-// refresh_gateway_url: re-fetches the session token and rebuilds the gateway URL.
-
 use serde::Serialize;
 use tauri::State;
 
+use crate::error::AppError;
 use crate::process::dashboard::{build_gateway_url, fetch_session_token};
 use crate::state::AppState;
 
@@ -19,11 +15,9 @@ pub struct RuntimeConfig {
     pub transport: String,
 }
 
-/// Returns the runtime configuration to the frontend for initialization.
-/// Replaces the Electron preload's synchronous injection of window.__HERMES_RUNTIME__.
 #[tauri::command]
-pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, String> {
-    let inner = state.inner.lock().map_err(|e| e.to_string())?;
+pub fn get_runtime_config(state: State<'_, AppState>) -> Result<RuntimeConfig, AppError> {
+    let inner = state.inner.lock()?;
     let transport = std::env::var("HERMES_DESKTOP_TRANSPORT")
         .unwrap_or_else(|_| "sse".to_string());
     Ok(RuntimeConfig {
@@ -42,13 +36,12 @@ pub struct RefreshGatewayResult {
     pub session_token: Option<String>,
 }
 
-/// Re-fetch the session token from the dashboard and return a fresh gateway URL.
 #[tauri::command]
 pub async fn refresh_gateway_url(
     state: State<'_, AppState>,
-) -> Result<RefreshGatewayResult, String> {
+) -> Result<RefreshGatewayResult, AppError> {
     let api_base_url = {
-        let inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let inner = state.inner.lock()?;
         inner.api_base_url.clone()
     };
 
@@ -60,9 +53,8 @@ pub async fn refresh_gateway_url(
 
     let fresh_url = build_gateway_url(&api_base_url, fresh_token.as_deref());
 
-    // Update state
     {
-        let mut inner = state.inner.lock().map_err(|e| e.to_string())?;
+        let mut inner = state.inner.lock()?;
         inner.gateway_url = fresh_url.clone();
         inner.session_token = fresh_token.clone();
     }
