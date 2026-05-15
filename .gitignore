@@ -21,3 +21,7 @@ Thumbs.db
 # Build artifacts
 static/dashboard/
 static/runtime/
+
+# Runtime release signing private key (gh secret RUNTIME_SIGN_PRIVATE_KEY_PEM)
+.runtime-keys/
+
