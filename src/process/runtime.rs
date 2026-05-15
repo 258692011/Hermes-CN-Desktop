@@ -257,8 +257,23 @@ fn configured_manifest_url() -> Option<String> {
         .filter(|s| !s.trim().is_empty())
         .or_else(|| BAKED_MANIFEST_CHANNEL.map(|s| s.to_string()))
         .unwrap_or_else(|| DEFAULT_CHANNEL.to_string());
-    let base = if base.ends_with('/') { base.to_string() } else { format!("{}/", base) };
-    Some(format!("{}{}/{}-{}.json", base, channel, current_platform(), current_arch()))
+    // URL pattern: ${base}/${channel}-${platform}-${arch}.json
+    // Flat (no path segments after base) so GitHub Releases hosting works
+    // out of the box — Releases assets share a single directory per tag.
+    // Static site hosting (Pages / Cloudflare) can still serve this by
+    // arranging filenames the same way.
+    let base = if base.ends_with('/') {
+        base.trim_end_matches('/').to_string()
+    } else {
+        base.to_string()
+    };
+    Some(format!(
+        "{}/{}-{}-{}.json",
+        base,
+        channel,
+        current_platform(),
+        current_arch()
+    ))
 }
 
 fn configured_public_key() -> Option<String> {
