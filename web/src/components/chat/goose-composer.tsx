@@ -43,8 +43,6 @@ import { SendIcon, StopIcon } from "./goose-composer-icons";
 import {
   ModelPickerModal,
   modelButtonText,
-  modelMatches,
-  providerMatches,
 } from "./goose-composer-model-picker";
 import { WorkspacePickerModal } from "@/components/composer/workspace-picker";
 import s from "./goose-composer.module.css";
@@ -117,7 +115,6 @@ export function GooseComposer({
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState("");
   const [modelSearch, setModelSearch] = useState("");
-  const [activeProviderSlug, setActiveProviderSlug] = useState("");
   const [switchingModel, setSwitchingModel] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -181,33 +178,9 @@ export function GooseComposer({
     };
   }, []);
 
-  useEffect(() => {
-    if (!modelOptions?.providers.length) return;
-    const current =
-      modelOptions.providers.find((provider) => provider.is_current)?.slug ||
-      modelOptions.provider ||
-      modelOptions.providers[0]?.slug ||
-      "";
-    setActiveProviderSlug((value) => value || current);
-  }, [modelOptions]);
-
-  const filteredProviders = useMemo(() => {
-    const query = modelSearch.trim().toLowerCase();
-    return (modelOptions?.providers ?? []).filter((provider) => providerMatches(provider, query));
-  }, [modelOptions, modelSearch]);
-
-  const activeProvider = useMemo(() => {
-    if (!filteredProviders.length) return null;
-    return (
-      filteredProviders.find((provider) => provider.slug === activeProviderSlug) ??
-      filteredProviders[0]
-    );
-  }, [activeProviderSlug, filteredProviders]);
-
-  const visibleModels = useMemo(() => {
-    const query = modelSearch.trim().toLowerCase();
-    return (activeProvider?.models ?? []).filter((model) => modelMatches(model, query));
-  }, [activeProvider, modelSearch]);
+  // Picker now groups candidates internally (recent / configured /
+  // recommended / more) from the catalog + usage log. Composer just hands it
+  // the raw model.options payload and stays out of the way.
 
   const appendAttachmentDrafts = (drafts: ComposerAttachment[]) => {
     if (!drafts.length) return;
@@ -685,14 +658,14 @@ export function GooseComposer({
           onClose={() => setModelOpen(false)}
           loading={modelLoading}
           error={modelError}
-          filteredProviders={filteredProviders}
-          activeProvider={activeProvider}
-          onProviderSelect={setActiveProviderSlug}
-          visibleModels={visibleModels}
           modelOptions={modelOptions}
           selected={modelPicker?.selected}
           switchingModel={switchingModel}
           onSelectModel={(selection) => void selectModel(selection)}
+          onConfigureProvider={(providerId) => {
+            setModelOpen(false);
+            modelPicker?.onConfigureProvider?.(providerId);
+          }}
         />
       ) : null}
       {workspacePickerOpen ? (

@@ -257,6 +257,30 @@ export function ModelsSection() {
   );
   const showSavedFlash = !isFormDirty && savedFlashFor === selectedProvider?.id;
 
+  // Deep-link from the picker's "去设置" CTA: /models#provider-<slug> selects
+  // and scrolls to that provider so the user lands on the right key field.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    const match = hash.match(/^#provider-(.+)$/);
+    if (!match) return;
+    const targetId = decodeURIComponent(match[1]);
+    if (!allProviders.some((p) => p.id === targetId)) return;
+    setSelectedProviderId(targetId);
+    // Wait one frame for the list item to mount with the new active state,
+    // then scroll it into view with a soft highlight pulse.
+    const handle = window.requestAnimationFrame(() => {
+      const el = document.getElementById(`provider-${targetId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.focus({ preventScroll: true });
+      }
+    });
+    return () => window.cancelAnimationFrame(handle);
+    // intentionally only on mount + when catalog finishes loading
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allProviders.length]);
+
   const handleReveal = async (key: string) => {
     if (revealedValues[key]) {
       setRevealedValues((prev) => {
@@ -432,6 +456,7 @@ export function ModelsSection() {
               return (
                 <button
                   key={provider.id}
+                  id={`provider-${provider.id}`}
                   className={s.providerPresetItem}
                   data-active={selectedProvider?.id === provider.id}
                   onClick={() => setSelectedProviderId(provider.id)}

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
+import { recordModelUsage } from "@/lib/model-usage-log";
 import { useStatus } from "@/hooks/use-status";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { resolveModelContextWindow } from "@/lib/model-context";
@@ -124,7 +125,12 @@ export function NewTaskRoute() {
     };
     setSelectedModel(enriched);
     rememberLastUsedModel(enriched);
+    recordModelUsage(enriched);
   }, [config]);
+
+  const onConfigureProvider = useCallback((providerId: string) => {
+    navigate(`/models#provider-${providerId}`);
+  }, [navigate]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
@@ -255,6 +261,7 @@ export function NewTaskRoute() {
                 loadOptions: () => getModelOptions(),
                 initialOptions: modelOptionsCache ?? null,
                 onSelect: onModelSelect,
+                onConfigureProvider,
                 disabled: sending,
               }}
               contextUsage={

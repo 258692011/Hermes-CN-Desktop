@@ -15,6 +15,7 @@ import { useSession, useSessionMessages, useSessions } from "@/hooks/use-session
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
+import { recordModelUsage } from "@/lib/model-usage-log";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
@@ -308,10 +309,15 @@ export function DetailRoute() {
       ...selection,
       contextWindow: resolveModelContextWindow(config, selection),
     });
+    recordModelUsage(selection);
     await getSessionUsage(gatewaySessionId)
       .then(setSessionUsage)
       .catch(() => {});
   }, [config, ensureGatewaySession, getSessionUsage, setSessionModel]);
+
+  const onConfigureProvider = useCallback((providerId: string) => {
+    navigate(`/models#provider-${providerId}`);
+  }, [navigate]);
 
   const onStop = useCallback(async () => {
     const sessionId = runtimeSessionId ?? taskId;
@@ -455,6 +461,7 @@ export function DetailRoute() {
             loadOptions: loadModelOptions,
             initialOptions: modelOptionsCache ?? null,
             onSelect: onModelSelect,
+            onConfigureProvider,
             disabled: runtimeIsBusy,
           }}
           contextUsage={contextUsage}

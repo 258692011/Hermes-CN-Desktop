@@ -6,6 +6,7 @@ import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
+import { recordModelUsage } from "@/lib/model-usage-log";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { uploadAttachmentFile } from "@/lib/transport";
 import { titleFromPrompt, titleWithSessionSuffix } from "@/lib/session-title";
@@ -77,7 +78,12 @@ export function PanelComposer() {
     };
     setSelectedModel(enriched);
     rememberLastUsedModel(enriched);
+    recordModelUsage(enriched);
   }, [config]);
+
+  const onConfigureProvider = useCallback((providerId: string) => {
+    navigate(`/models#provider-${providerId}`);
+  }, [navigate]);
 
   const onSend = useCallback(async (
     payload: ComposerSubmitPayload,
@@ -160,6 +166,7 @@ export function PanelComposer() {
           loadOptions: () => getModelOptions(),
           initialOptions: modelOptionsCache ?? null,
           onSelect: onModelSelect,
+          onConfigureProvider,
           disabled: sending,
         }}
         contextUsage={
