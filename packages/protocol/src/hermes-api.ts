@@ -584,6 +584,17 @@ export const ModelOptionsResult = z.object({
 }).passthrough();
 export type ModelOptionsResult = z.infer<typeof ModelOptionsResult>;
 
+export const ProviderProbeResult = z.object({
+  ok: z.boolean(),
+  latency_ms: z.number(),
+  model_count: z.number(),
+  sample_models: z.array(z.string()),
+  status_code: z.number().nullable(),
+  error: z.string().nullable(),
+  error_kind: z.enum(["auth", "timeout", "http", "network", "unknown"]).nullable(),
+}).passthrough();
+export type ProviderProbeResult = z.infer<typeof ProviderProbeResult>;
+
 export const ConfigSetResult = z.object({
   key: z.string().optional(),
   value: z.string().optional(),

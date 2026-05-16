@@ -2,7 +2,9 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useConfig, useModelInfo, useSaveConfig } from "@/hooks/use-config";
 import { useDeleteEnv, useEnvVars, useRevealEnv, useSetEnv } from "@/hooks/use-env";
+import { useGateway } from "@/hooks/use-gateway";
 import { useProviderModels } from "@/hooks/use-provider-models";
+import type { ProviderProbeResult } from "@hermes/protocol";
 import {
   BUILTIN_PROVIDER_CATALOG,
   buildProviderConfigUpdate,
@@ -60,7 +62,14 @@ export function ModelsSection() {
   const setEnv = useSetEnv();
   const deleteEnv = useDeleteEnv();
   const revealEnv = useRevealEnv();
+  const { probeProvider } = useGateway();
   const { catalog, message: catalogMessage, refresh: refreshCatalog } = useProviderCatalog();
+  const [probeState, setProbeState] = useState<{
+    providerId: string;
+    status: "pending" | "ok" | "error";
+    result?: ProviderProbeResult;
+    message?: string;
+  } | null>(null);
   const initialProvider =
     BUILTIN_PROVIDER_CATALOG.providers.find((p) => p.id === TOP5_PROVIDER_IDS[0]) ??
     BUILTIN_PROVIDER_CATALOG.providers[0];
@@ -244,7 +253,44 @@ export function ModelsSection() {
   // Switching to a different provider hides any stale "已保存" indicator.
   useEffect(() => {
     setSavedFlashFor(null);
+    setProbeState(null);
   }, [selectedProvider?.id]);
+
+  const handleProbe = useCallback(async () => {
+    if (!selectedProvider) return;
+    const apiKey = providerForm.apiKey.trim() ||
+      (typeof selectedProviderEntry.api_key === "string" ? selectedProviderEntry.api_key : "");
+    const baseUrl = providerForm.baseUrl.trim() || selectedProvider.baseUrl;
+    setProbeState({ providerId: selectedProvider.id, status: "pending" });
+    try {
+      // Map catalog id → backend canonical slug for env-var fallback. When
+      // the catalog id has no canonical equivalent (e.g. baidu-qianfan,
+      // tencent-hunyuan — not in CANONICAL_PROVIDERS), we pass the catalog
+      // id; the backend handler tolerates unknown slugs as long as api_key
+      // + base_url are supplied explicitly.
+      const result = await probeProvider({
+        provider: selectedProvider.id,
+        api_key: apiKey || undefined,
+        base_url: baseUrl || undefined,
+        timeout_ms: 8000,
+      });
+      setProbeState({
+        providerId: selectedProvider.id,
+        status: result.ok ? "ok" : "error",
+        result,
+      });
+    } catch (error) {
+      setProbeState({
+        providerId: selectedProvider.id,
+        status: "error",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [probeProvider, providerForm.apiKey, providerForm.baseUrl, selectedProvider, selectedProviderEntry.api_key]);
+
+  const probeForSelected = probeState && selectedProvider && probeState.providerId === selectedProvider.id
+    ? probeState
+    : null;
 
   const isFormDirty = !!(
     selectedProvider &&
@@ -548,7 +594,21 @@ export function ModelsSection() {
                     ? "✓ 已保存"
                     : "保存并设为当前模型"}
               </button>
+              <button
+                className={s.btn}
+                disabled={
+                  probeForSelected?.status === "pending" ||
+                  (!selectedHasCredentials && !providerForm.apiKey.trim())
+                }
+                onClick={() => void handleProbe()}
+                title="向 /models 端点发一次 GET，验证 API Key + 网络通"
+              >
+                {probeForSelected?.status === "pending" ? "测试中…" : "测试连接"}
+              </button>
             </div>
+            {probeForSelected && probeForSelected.status !== "pending" && (
+              <ProbeResultRow probe={probeForSelected} />
+            )}
           </div>
         )}
       </div>
@@ -705,6 +765,37 @@ function EnvRow({ envKey, info, revealedValue, isEditing, editVal, onEdit, onEdi
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function ProbeResultRow({ probe }: { probe: { status: "ok" | "error" | "pending"; result?: ProviderProbeResult; message?: string } }) {
+  if (probe.status === "pending") return null;
+  const result = probe.result;
+  if (probe.status === "ok" && result?.ok) {
+    return (
+      <div className={s.desc} style={{ marginTop: 8 }}>
+        ✓ 连接成功 · 延迟 {result.latency_ms}ms · 可用 {result.model_count} 个模型
+        {result.sample_models.length > 0 && (
+          <span style={{ marginLeft: 8, opacity: 0.7 }}>
+            （示例：{result.sample_models.slice(0, 3).join("、")}）
+          </span>
+        )}
+      </div>
+    );
+  }
+  const errorText = result?.error || probe.message || "未知错误";
+  const kindLabel: Record<string, string> = {
+    auth: "API Key 被拒绝",
+    timeout: "请求超时",
+    http: "HTTP 错误",
+    network: "网络不通",
+    unknown: "未知错误",
+  };
+  const kind = result?.error_kind ? kindLabel[result.error_kind] ?? result.error_kind : "请求失败";
+  return (
+    <div className={s.desc} style={{ marginTop: 8, color: "var(--h-danger, #c44)" }}>
+      ✗ {kind} · {errorText}
     </div>
   );
 }

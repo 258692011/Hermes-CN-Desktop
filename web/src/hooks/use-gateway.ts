@@ -7,12 +7,14 @@ import {
   InputDetectDropResult,
   ModelOptionsResult,
   PromptSubmitParams,
+  ProviderProbeResult,
   SessionCreateResult,
   SessionResumeResult,
   SessionTitleResult,
   SessionUsageResult,
   type GatewayEvent,
 } from "@hermes/protocol";
+import { CN_BACKEND_PROVIDER_SLUGS } from "@/lib/cn-provider-slugs";
 import { getGatewayClient } from "@/lib/gateway-client";
 import {
   getCachedModelOptions,
@@ -240,9 +242,27 @@ export function useGateway() {
         async () => ModelOptionsResult.parse(
           await getGatewayClient().request(
             "model.options",
-            sessionId ? { session_id: sessionId } : {},
+            {
+              slug_filter: CN_BACKEND_PROVIDER_SLUGS,
+              ...(sessionId ? { session_id: sessionId } : {}),
+            },
           ),
         ),
+      );
+    },
+    [ensureSubscribed],
+  );
+
+  const probeProvider = useCallback(
+    async (params: {
+      provider: string;
+      api_key?: string;
+      base_url?: string;
+      timeout_ms?: number;
+    }): Promise<ProviderProbeResult> => {
+      ensureSubscribed();
+      return ProviderProbeResult.parse(
+        await getGatewayClient().request("provider.probe", params),
       );
     },
     [ensureSubscribed],
@@ -359,6 +379,7 @@ export function useGateway() {
     sendPrompt,
     getSessionUsage,
     getModelOptions,
+    probeProvider,
     setSessionModel,
     attachImage,
     detectDroppedPath,
