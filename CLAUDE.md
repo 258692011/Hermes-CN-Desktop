@@ -136,3 +136,14 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 
 - **9119**：Hermes Dashboard（UI 对接的后端）
 - **9545**：Vite dev server（`web/vite.config.ts` 写死，strictPort）
+
+## Rust 测试约定
+
+- **单元测试**：`#[cfg(test)] mod tests { ... }` 内嵌在源文件底部，可触及私有函数；新增 module 一定要带
+- **集成测试**：跨模块或带 HTTP/FS mock 的测试放仓库根 `tests/` 目录，仅依赖 `pub` API；用 crate 名 `hermes_agent_cn` 引入
+- **env 依赖测试**：必须 `#[serial_test::serial]`，否则会被并行测试污染
+- **文件系统测试**：用 `tempfile::TempDir`，禁止写 `/tmp`、cwd 或固定路径
+- **HTTP 测试**：用 `wiremock::MockServer`，禁止打真实网络
+- **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
+- **CI**：`.github/workflows/rust-test.yml` 在 PR / push 到 main / dev 时跑 `cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`
+- **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock

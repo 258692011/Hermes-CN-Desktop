@@ -1,0 +1,57 @@
+# Rust backend test suite for hermes-cn-desktop-v2.
+#
+# Runs on every PR and push to main/dev. Separate workflow from
+# release-desktop.yml so a flaky test does not block tagged releases.
+#
+# Linux-only matrix: the test suite is platform-independent except for
+# prevent_sleep.rs (macOS only, gated behind cfg). Running on ubuntu
+# is faster + cheaper than the cross-platform matrix.
+
+name: rust-test
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build deps
+        # Required by tauri-build (build.rs) — even cargo test compiles the
+        # crate, which links against webkit/gtk via tauri's deps.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --all-features --no-fail-fast
