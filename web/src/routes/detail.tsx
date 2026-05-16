@@ -16,7 +16,7 @@ import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
 import { useModelOptions } from "@/hooks/use-model-options";
 import { recordModelUsage } from "@/lib/model-usage-log";
-import { forgetSessionModelOverride, readSessionModelOverride } from "@/lib/session-model-override";
+import { readSessionModelOverride } from "@/lib/session-model-override";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
@@ -136,11 +136,16 @@ export function DetailRoute() {
   // the path new-task / panel-composer use to hand off the just-picked
   // model so detail doesn't briefly show the global default before the
   // backend round-trips back with the real session model.
+  //
+  // Don't delete the storage entry here — StrictMode runs effects twice
+  // (mount → unmount → mount) in dev, and an eager delete on the first run
+  // means the second run reads nothing and clobbers selectedModel back to
+  // null. sessionStorage dies with the tab anyway; per-session-id keys
+  // never collide, so leaving stale entries is safe.
   useEffect(() => {
     const override = taskId ? readSessionModelOverride(taskId) : null;
     setSelectedModel(override);
     setSessionUsage(null);
-    if (taskId && override) forgetSessionModelOverride(taskId);
   }, [taskId]);
 
   useEffect(() => {
