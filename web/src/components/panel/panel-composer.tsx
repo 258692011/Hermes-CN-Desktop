@@ -3,6 +3,7 @@ import { useAtom } from "jotai";
 import { useNavigate } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
+import { useModelOptions } from "@/hooks/use-model-options";
 import { resolveModelContextWindow } from "@/lib/model-context";
 import { readLastUsedModel, rememberLastUsedModel } from "@/lib/last-used-model";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
@@ -33,6 +34,7 @@ export function PanelComposer() {
   } = useGateway();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
+  const { data: modelOptionsCache } = useModelOptions();
   const [sending, setSending] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
     () => readLastUsedModel(),
@@ -156,6 +158,7 @@ export function PanelComposer() {
           selected: selectedModel,
           label: modelInfo?.model,
           loadOptions: () => getModelOptions(),
+          initialOptions: modelOptionsCache ?? null,
           onSelect: onModelSelect,
           disabled: sending,
         }}

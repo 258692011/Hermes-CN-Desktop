@@ -14,6 +14,7 @@ import {
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
+import { useModelOptions } from "@/hooks/use-model-options";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { formatElapsedTimer } from "@/lib/format";
 import { getGatewayClient } from "@/lib/gateway-client";
@@ -71,6 +72,7 @@ export function DetailRoute() {
   } = useGateway();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
+  const { data: modelOptionsCache } = useModelOptions();
   const [sessionUsage, setSessionUsage] = useState<SessionUsageResult | null>(null);
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(null);
   const [sessionIdCopyState, setSessionIdCopyState] = useState<"idle" | "copied" | "error">("idle");
@@ -287,10 +289,17 @@ export function DetailRoute() {
     });
   }, [attachImage, detectDroppedPath, ensureGatewaySession, restSessionId, sendPrompt, taskId]);
 
-  const loadModelOptions = useCallback(async () => {
-    const gatewaySessionId = await ensureGatewaySession();
-    return getModelOptions(gatewaySessionId);
-  }, [ensureGatewaySession, getModelOptions]);
+  // Capability discovery is server-global — don't piggy-back on
+  // ensureGatewaySession here. That helper can trigger session.resume, which
+  // the backend categorises as a slow handler (tui_gateway/server.py:139,
+  // "可达几分钟"). When the underlying agent has crashed or SSE is
+  // mid-reconnect, the resume call hangs and the picker spinner hangs with
+  // it. The session_id was only used by the backend to highlight "current
+  // model" — useModelInfo gives us that without needing a live session.
+  const loadModelOptions = useCallback(
+    () => getModelOptions(),
+    [getModelOptions],
+  );
 
   const onModelSelect = useCallback(async (selection: ComposerModelSelection) => {
     const gatewaySessionId = await ensureGatewaySession();
@@ -444,6 +453,7 @@ export function DetailRoute() {
             selected: contextSelection,
             label: model || modelInfo?.model,
             loadOptions: loadModelOptions,
+            initialOptions: modelOptionsCache ?? null,
             onSelect: onModelSelect,
             disabled: runtimeIsBusy,
           }}

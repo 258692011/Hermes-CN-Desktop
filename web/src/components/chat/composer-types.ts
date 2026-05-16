@@ -51,6 +51,9 @@ export interface ComposerModelPickerProps {
   selected?: ComposerModelSelection | null;
   label?: string;
   loadOptions?: () => Promise<ModelOptionsResult>;
+  /** Pre-fetched options from useModelOptions — prevents the picker from
+   * showing a spinner on first open when the data is already in cache. */
+  initialOptions?: ModelOptionsResult | null;
   onSelect?: (selection: ComposerModelSelection) => void | Promise<void>;
   disabled?: boolean;
 }

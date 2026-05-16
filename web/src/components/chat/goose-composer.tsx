@@ -111,7 +111,9 @@ export function GooseComposer({
   const [submitError, setSubmitError] = useState("");
   const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
-  const [modelOptions, setModelOptions] = useState<ModelOptionsResult | null>(null);
+  const [modelOptions, setModelOptions] = useState<ModelOptionsResult | null>(
+    modelPicker?.initialOptions ?? null,
+  );
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState("");
   const [modelSearch, setModelSearch] = useState("");
@@ -504,6 +506,15 @@ export function GooseComposer({
       if (timeoutId !== undefined) clearTimeout(timeoutId);
     };
   }, [disabled, loadModelOptions, modelOptions, modelPicker?.disabled, modelPicker?.loadOptions]);
+
+  // When the parent's useModelOptions query resolves *after* this composer
+  // mounts (cache miss on first ever load), backfill our local state so the
+  // picker opens with data instead of a spinner.
+  useEffect(() => {
+    if (modelPicker?.initialOptions && !modelOptions) {
+      setModelOptions(modelPicker.initialOptions);
+    }
+  }, [modelPicker?.initialOptions, modelOptions]);
 
   const modelText = modelButtonText(modelPicker, modelOptions);
 

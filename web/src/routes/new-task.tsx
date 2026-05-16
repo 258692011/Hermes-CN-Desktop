@@ -3,6 +3,7 @@ import { useAtom, useSetAtom } from "jotai";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
+import { useModelOptions } from "@/hooks/use-model-options";
 import { useStatus } from "@/hooks/use-status";
 import { prepareComposerPrompt } from "@/lib/composer-prompt";
 import { resolveModelContextWindow } from "@/lib/model-context";
@@ -70,6 +71,7 @@ export function NewTaskRoute() {
   } = useGateway();
   const { data: config } = useConfig();
   const { data: modelInfo } = useModelInfo();
+  const { data: modelOptionsCache } = useModelOptions();
   const { data: status, isError: statusError } = useStatus();
   const [sending, setSending] = useState(false);
   const [selectedModel, setSelectedModel] = useState<ComposerModelSelection | null>(
@@ -251,6 +253,7 @@ export function NewTaskRoute() {
                 selected: selectedModel,
                 label: modelInfo?.model,
                 loadOptions: () => getModelOptions(),
+                initialOptions: modelOptionsCache ?? null,
                 onSelect: onModelSelect,
                 disabled: sending,
               }}
