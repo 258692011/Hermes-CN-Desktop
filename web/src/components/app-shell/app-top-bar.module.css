@@ -1,0 +1,164 @@
+/* Topbar — brand · 01-05 nav · search · actions
+   Inspired by prototypes/.topbar */
+
+.topbar {
+  height: var(--h-topbar-h);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 16px;
+  border-bottom: 1px solid var(--h-line);
+  background: linear-gradient(180deg, var(--ink-100), var(--ink-050));
+  position: relative;
+  z-index: 10;
+  -webkit-app-region: drag;
+}
+
+.topbar > *:not([data-no-drag]) {
+  /* Buttons / links inside should remain interactive on macOS native frame. */
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--h-font-serif);
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--bone-100);
+  letter-spacing: -0.01em;
+  user-select: none;
+}
+
+.glyph {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--persimmon);
+  color: var(--persimmon);
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  font-style: normal;
+  border-radius: 2px;
+  transform: rotate(-6deg);
+}
+
+.ver {
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  color: var(--bone-600);
+  font-style: normal;
+  letter-spacing: 0.04em;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.navLink {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--h-text-2);
+  border-radius: 3px;
+  letter-spacing: 0.01em;
+  font-family: var(--h-font-mono);
+  text-transform: lowercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  transition: color 0.12s, background 0.12s;
+}
+
+.navLink:hover {
+  color: var(--h-text);
+  background: var(--ink-300);
+}
+
+.navLink[data-active="true"] {
+  color: var(--bone-100);
+  background: var(--ink-300);
+}
+
+.navNum {
+  font-size: 9px;
+  color: var(--bone-600);
+  margin-right: 6px;
+  font-feature-settings: "tnum";
+}
+
+.navLink[data-active="true"] .navNum {
+  color: var(--persimmon);
+}
+
+.search {
+  flex: 1;
+  max-width: 360px;
+  height: 28px;
+  background: var(--ink-200);
+  border: 1px solid var(--h-line);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  color: var(--h-text-2);
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+.searchKbd {
+  margin-left: auto;
+  font-family: var(--h-font-mono);
+  font-size: 9.5px;
+  color: var(--bone-600);
+  border: 1px solid var(--h-line);
+  background: var(--ink-100);
+  padding: 1px 4px;
+  border-radius: 2px;
+  letter-spacing: 0.04em;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+.iconBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: var(--h-text-2);
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  color: var(--h-text);
+  background: var(--ink-300);
+  border-color: var(--h-line);
+}
+
+.iconBtn[data-active="true"] {
+  color: var(--bone-100);
+  background: var(--ink-300);
+  border-color: var(--h-line);
+}

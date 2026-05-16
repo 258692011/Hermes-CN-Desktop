@@ -22,3 +22,11 @@
   --h-r-lg: 12px;
   --h-r-pill: 999px;
 }
+
+/* App-shell layout sizing — aligned with prototypes' --topbar-h / --sidebar-w / --statusbar-h. */
+:root {
+  --h-topbar-h: 48px;
+  --h-statusbar-h: 26px;
+  --h-sidebar-w: 248px;
+  --h-tab-h: 36px;
+}

@@ -14,12 +14,15 @@ import "./styles/global.css";
 applyPlatformToDOM(runtime.platform);
 installDebugCapture();
 
+// Default to dark theme; honor any saved preference if present.
+let initialTheme: { theme: string; density: string } = { theme: "dark", density: "comfortable" };
 const saved = localStorage.getItem("hermes-theme");
 if (saved) {
   try {
-    applyThemeToDOM(JSON.parse(saved));
+    initialTheme = { ...initialTheme, ...JSON.parse(saved) };
   } catch {}
 }
+applyThemeToDOM(initialTheme as Parameters<typeof applyThemeToDOM>[0]);
 
 async function fetchDevToken() {
   // Desktop runtime injects sessionToken directly and never rotates it within

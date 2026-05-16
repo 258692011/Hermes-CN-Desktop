@@ -1,5 +1,39 @@
 /* Hermes Design Tokens — Colors
-   Anthropic-flavored: warm cream / muted neutrals / single coral accent. */
+   Anthropic-flavored: warm cream / muted neutrals / single coral accent.
+
+   Dark palette aligned with hermes-cn-ui-prototypes (ink/bone/persimmon). */
+
+:root {
+  /* ── Raw palette (ink/bone/accents)
+     ── Source: hermes-cn-ui-prototypes/src/styles/tokens.base.css */
+  --ink-000: #050403;
+  --ink-050: #0a0908;
+  --ink-100: #11100e;
+  --ink-200: #1a1816;
+  --ink-300: #232120;
+  --ink-400: #2e2b29;
+  --ink-500: #3a3633;
+  --ink-600: #4a4541;
+  --ink-700: #5a554f;
+  --ink-800: #6e685f;
+
+  --bone-100: #f6f1e3;
+  --bone-200: #e8e2d4;
+  --bone-300: #d2cabb;
+  --bone-400: #aaa291;
+  --bone-500: #8a8273;
+  --bone-600: #6d6759;
+
+  --persimmon: #ff7a3d;
+  --persimmon-dim: #c95722;
+  --amber: #e8b85d;
+  --moss: #8db580;
+  --moss-deep: #5e7d54;
+  --rust: #d96666;
+  --rust-deep: #a8413f;
+  --sky: #6e9bd1;
+  --plum: #b58dc4;
+}
 
 :root,
 [data-theme="light"] {
@@ -29,27 +63,30 @@
 }
 
 [data-theme="dark"] {
-  --h-bg-app: #1f1d1a;
-  --h-bg-pane: #26231f;
-  --h-bg-soft: #2c2925;
-  --h-bg-input: #2c2925;
-  --h-bg-chip: #3a352f;
-  --h-bg-code: #2a2622;
-  --h-line: #3a352f;
-  --h-line-soft: #332e29;
-  --h-text: #e8e3d8;
-  --h-text-2: #b8b1a3;
-  --h-text-3: #7d7669;
-  --h-text-4: #544e44;
-  --h-ok: #9bbc8d;
-  --h-ok-soft: #3a4a36;
-  --h-warn: #d9a861;
-  --h-warn-soft: #4a3d22;
-  --h-err: #d97870;
-  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --h-shadow-l: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --h-sidebar-stripe: #1c1a17;
-  --h-accent: #e89466;
-  --h-accent-soft: #4a2f1f;
-  --h-accent-border: #a06a4a;
+  /* Dark theme remapped onto the ink/bone palette so existing components
+     adopt the prototype's deeper, cooler palette without per-component
+     rewrites. */
+  --h-bg-app: var(--ink-050);
+  --h-bg-pane: var(--ink-100);
+  --h-bg-soft: var(--ink-200);
+  --h-bg-input: var(--ink-200);
+  --h-bg-chip: var(--ink-300);
+  --h-bg-code: var(--ink-200);
+  --h-line: #2a2725;
+  --h-line-soft: #1d1b19;
+  --h-text: var(--bone-200);
+  --h-text-2: var(--bone-400);
+  --h-text-3: var(--bone-500);
+  --h-text-4: var(--bone-600);
+  --h-ok: var(--moss);
+  --h-ok-soft: rgba(141, 181, 128, 0.08);
+  --h-warn: var(--amber);
+  --h-warn-soft: rgba(232, 184, 93, 0.08);
+  --h-err: var(--rust);
+  --h-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --h-shadow-l: 0 12px 40px rgba(0, 0, 0, 0.6);
+  --h-sidebar-stripe: var(--ink-100);
+  --h-accent: var(--persimmon);
+  --h-accent-soft: rgba(255, 122, 61, 0.08);
+  --h-accent-border: rgba(255, 122, 61, 0.3);
 }

@@ -9,11 +9,9 @@ import {
   readSessionTitleOverrides,
   subscribeSessionUiStateChanges,
 } from "@/lib/session-ui-state";
-import { TopBar } from "@/components/top-bar/top-bar";
 import { HealthGrid } from "@/components/panel/health-grid";
 import { PanelComposer } from "@/components/panel/panel-composer";
 import { PanelHero } from "@/components/panel/panel-hero";
-import { PanelTopChips } from "@/components/panel/panel-top-chips";
 import { QuickStart } from "@/components/panel/quick-start";
 import { RecentTable } from "@/components/panel/recent-table";
 import { TaskCard } from "@/components/panel/task-card";
@@ -25,6 +23,32 @@ const TODAY_START_SEC = () => {
   d.setHours(0, 0, 0, 0);
   return d.getTime() / 1000;
 };
+
+interface SectionProps {
+  num: string;
+  tag: string;
+  title: string;
+  meta?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+function Section({ num, tag, title, meta, children }: SectionProps) {
+  return (
+    <section className={s.section}>
+      <div className={s.sectionNum}>§ {num}</div>
+      <div className={s.sectionBody}>
+        <div className={s.sectionHead}>
+          <div className={s.sectionLh}>
+            <span className={s.sectionTag}>[ {tag} ]</span>
+            <h2 className={s.sectionTitle}>{title}</h2>
+          </div>
+          {meta && <div className={s.sectionMeta}>{meta}</div>}
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
 
 export function PanelRoute() {
   const [, setActiveId] = useAtom(activeSessionIdAtom);
@@ -74,58 +98,62 @@ export function PanelRoute() {
     navigate(`/tasks/${sess.id}`);
   };
 
-  const subtitle = `${active.length} 个运行中 · 今日 ${todayStats.completed} 个完成 · ${todayStats.needsAttention} 个需要关注`;
-
   return (
-    <div className={s.page}>
-      <TopBar title="任务面板" sub={subtitle} right={<PanelTopChips />} />
-      <div className={s.content}>
-        <div className={s.hero}>
-          <PanelHero activeCount={active.length} />
-        </div>
+    <div className={s.pageWrap}>
+      <div className={s.pageContent}>
+        <PanelHero
+          activeCount={active.length}
+          completedToday={todayStats.completed}
+          needsAttention={todayStats.needsAttention}
+        />
 
-        <div className={s.composerWrap}>
+        <Section num="01" tag="开始" title="新任务">
           <PanelComposer />
-        </div>
+        </Section>
 
-        <section className={s.section}>
-          <div className={s.sectionHead}>
-            <h2 className={s.sectionTitle}>健康检查</h2>
-          </div>
+        <Section
+          num="02"
+          tag="健康"
+          title="当前状态"
+          meta={<>实时刷新</>}
+        >
           <HealthGrid />
-        </section>
+        </Section>
 
         {isLoading && <div className={s.loading}>加载中…</div>}
 
         {active.length > 0 && (
-          <section className={s.section}>
-            <div className={s.sectionHead}>
-              <h2 className={s.sectionTitle}>正在运行</h2>
-              <span className={s.sectionMeta}>{active.length} 个任务 · 自动刷新</span>
-            </div>
+          <Section
+            num="03"
+            tag="运行中"
+            title="正在执行"
+            meta={`${active.length} 个任务 · 自动刷新`}
+          >
             <div className={s.taskGrid}>
               {active.map((sess) => (
                 <TaskCard key={sess.id} session={sess} onClick={() => goSession(sess)} />
               ))}
             </div>
-          </section>
+          </Section>
         )}
 
-        <section className={s.section}>
-          <div className={s.sectionHead}>
-            <h2 className={s.sectionTitle}>最近会话</h2>
-            <span className={s.sectionMeta}>共 {recent.length} 个</span>
-          </div>
+        <Section
+          num={active.length > 0 ? "04" : "03"}
+          tag="近况"
+          title="最近会话"
+          meta={`共 ${recent.length} 个`}
+        >
           <RecentTable sessions={recent} onOpen={goSession} />
-        </section>
+        </Section>
 
-        <section className={s.section}>
-          <div className={s.sectionHead}>
-            <h2 className={s.sectionTitle}>快速起手</h2>
-            <span className={s.sectionMeta}>点击预填到 Composer</span>
-          </div>
+        <Section
+          num={active.length > 0 ? "05" : "04"}
+          tag="模板"
+          title="快速起手"
+          meta="点击预填到 Composer"
+        >
           <QuickStart />
-        </section>
+        </Section>
       </div>
     </div>
   );

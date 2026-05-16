@@ -9,7 +9,7 @@ export interface ThemeConfig {
 }
 
 const DEFAULT_THEME: ThemeConfig = {
-  theme: "light",
+  theme: "dark",
   density: "comfortable",
 };
 
@@ -19,7 +19,7 @@ function loadTheme(): ThemeConfig {
     if (saved) {
       const parsed = JSON.parse(saved) as Partial<ThemeConfig>;
       return {
-        theme: parsed.theme === "dark" ? "dark" : "light",
+        theme: parsed.theme === "light" ? "light" : "dark",
         density: parsed.density === "compact" ? "compact" : "comfortable",
       };
     }

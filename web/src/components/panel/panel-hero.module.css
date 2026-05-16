@@ -1,33 +1,75 @@
-.row {
+/* Hero — left ".num" gutter + right big italic title + greet meta row.
+   Mirrors prototypes/.hero */
+
+.hero {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 28px;
+  grid-template-columns: 64px 1fr;
+  gap: 16px;
   align-items: end;
+  padding: 32px 0 24px;
+  border-bottom: 1px solid var(--h-line-soft);
 }
 
-.left {
+.num {
+  font-family: var(--h-font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--bone-600);
+  line-height: 1.6;
+}
+
+.numTop {
+  display: block;
+  color: var(--bone-500);
+}
+
+.body {
   min-width: 0;
 }
 
 .title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--h-text);
+  font-family: var(--h-font-serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1.05;
   letter-spacing: -0.015em;
-  line-height: 1.3;
+  color: var(--bone-100);
 }
 
-.stamp {
-  margin-top: 6px;
-  font-size: 11.5px;
-  color: var(--h-text-3);
-  font-variant-numeric: tabular-nums;
+.title em {
+  font-style: italic;
+  color: var(--persimmon);
+  font-weight: 500;
 }
 
-.pills {
+.greet {
+  margin-top: 12px;
   display: flex;
-  gap: 8px;
+  align-items: center;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 14px;
+  font-family: var(--h-font-mono);
+  font-size: 11px;
+  color: var(--bone-500);
+}
+
+.day {
+  color: var(--bone-400);
+}
+
+.attn {
+  color: var(--persimmon);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+  }
+  .title {
+    font-size: 32px;
+  }
 }

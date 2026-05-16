@@ -1,0 +1,218 @@
+/* Workbench sidebar — mirrors prototypes/.sidebar */
+
+.sidebar {
+  height: 100%;
+  background: var(--ink-100);
+  border-right: 1px solid var(--h-line);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.sidebar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(255, 122, 61, 0.25) 30%,
+    rgba(255, 122, 61, 0.25) 70%,
+    transparent
+  );
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.newTask {
+  margin: 12px;
+  height: 36px;
+  background: var(--persimmon);
+  color: #1a0c04;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    0 2px 0 rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  font-family: var(--h-font-cn);
+}
+
+.newTask:hover {
+  background: #ff8a52;
+}
+
+.newTaskKbd {
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  font-family: var(--h-font-mono);
+  font-size: 9.5px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  letter-spacing: 0.04em;
+}
+
+.scrollY {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.section {
+  padding: 4px 0 8px 0;
+}
+
+.section + .section {
+  border-top: 1px solid var(--h-line-soft);
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px 6px 16px;
+  font-family: var(--h-font-mono);
+  font-size: 9.5px;
+  color: var(--bone-600);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.labelNum {
+  opacity: 0.7;
+}
+
+.sessionRow {
+  padding: 8px 16px 8px 18px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  display: block;
+}
+
+.sessionRow:hover {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.sessionRow[data-active="true"] {
+  background: var(--ink-300);
+  border-left-color: var(--persimmon);
+}
+
+.ttl {
+  font-size: 12.5px;
+  color: var(--h-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--bone-600);
+}
+
+.dot[data-state="live"] {
+  background: var(--persimmon);
+  box-shadow: 0 0 0 3px rgba(255, 122, 61, 0.18);
+}
+
+.dot[data-state="ok"] {
+  background: var(--moss);
+}
+
+.dot[data-state="err"] {
+  background: var(--rust);
+}
+
+.meta {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--h-font-mono);
+  font-size: 10px;
+  color: var(--bone-600);
+}
+
+.sideItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  font-size: 12.5px;
+  color: var(--h-text-2);
+  cursor: pointer;
+  position: relative;
+  border-left: 2px solid transparent;
+  background: transparent;
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--h-font-cn);
+}
+
+.sideItem:hover {
+  color: var(--h-text);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sideItem[data-active="true"] {
+  color: var(--bone-100);
+  background: var(--ink-300);
+  border-left-color: var(--persimmon);
+}
+
+.sideItemIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--bone-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sideItem[data-active="true"] .sideItemIcon {
+  color: var(--persimmon);
+}
+
+.sideItemLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.empty {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--bone-600);
+  font-family: var(--h-font-mono);
+}

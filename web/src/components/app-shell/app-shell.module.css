@@ -1,0 +1,59 @@
+/* App shell — CSS Grid: topbar / [sidebar + main] / statusbar
+   Mirrors prototypes' `.app .app--two` layout. */
+
+.shell {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-rows: var(--h-topbar-h) 1fr var(--h-statusbar-h);
+  grid-template-columns: var(--h-sidebar-w) 1fr;
+  overflow: hidden;
+  background: var(--h-bg-app);
+  color: var(--h-text);
+  font-family: var(--h-font-cn);
+}
+
+.topbarSlot {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.sidebarSlot {
+  grid-column: 1;
+  grid-row: 2;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mainSlot {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--h-bg-app);
+}
+
+.statusbarSlot {
+  grid-column: 1 / -1;
+  grid-row: 3;
+}
+
+/* Fullscreen mode for settings: no sidebar / statusbar, route gets entire area. */
+.shell[data-fullscreen="true"] {
+  grid-template-rows: 1fr;
+  grid-template-columns: 1fr;
+}
+
+.shell[data-fullscreen="true"] .topbarSlot,
+.shell[data-fullscreen="true"] .sidebarSlot,
+.shell[data-fullscreen="true"] .statusbarSlot {
+  display: none;
+}
+
+.shell[data-fullscreen="true"] .mainSlot {
+  grid-column: 1;
+  grid-row: 1;
+}
