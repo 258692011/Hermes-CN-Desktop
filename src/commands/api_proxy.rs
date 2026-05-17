@@ -8,6 +8,7 @@
 // to the hermes dashboard with auth header injection.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -62,6 +63,91 @@ fn url_path(path: &str) -> String {
     } else {
         path.split('?').next().unwrap_or(path).to_string()
     }
+}
+
+fn is_blocked_external_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let octets = v4.octets();
+            v4.is_private()
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_unspecified()
+                || octets[0] == 0
+                || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+        }
+        IpAddr::V6(v6) => {
+            let first = v6.segments()[0];
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (first & 0xfe00) == 0xfc00
+                || (first & 0xffc0) == 0xfe80
+                || v6
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| is_blocked_external_ip(IpAddr::V4(v4)))
+        }
+    }
+}
+
+fn validate_external_url_shape(raw: &str) -> Result<url::Url, AppError> {
+    let url = url::Url::parse(raw)?;
+    if url.scheme() != "https" {
+        return Err(AppError::InvalidRequest(
+            "external_request only allows https URLs".to_string(),
+        ));
+    }
+
+    match url.host().ok_or_else(|| {
+        AppError::InvalidRequest("external_request URL must include a host".to_string())
+    })? {
+        url::Host::Domain(host) => {
+            let lower_host = host.to_ascii_lowercase();
+            if lower_host == "localhost" || lower_host.ends_with(".localhost") {
+                return Err(AppError::InvalidRequest(
+                    "external_request refuses localhost targets".to_string(),
+                ));
+            }
+        }
+        url::Host::Ipv4(ip) => {
+            if is_blocked_external_ip(IpAddr::V4(ip)) {
+                return Err(AppError::InvalidRequest(
+                    "external_request refuses private or local IP targets".to_string(),
+                ));
+            }
+        }
+        url::Host::Ipv6(ip) => {
+            if is_blocked_external_ip(IpAddr::V6(ip)) {
+                return Err(AppError::InvalidRequest(
+                    "external_request refuses private or local IP targets".to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(url)
+}
+
+async fn validate_external_url(raw: &str) -> Result<url::Url, AppError> {
+    let url = validate_external_url_shape(raw)?;
+
+    if let Some(url::Host::Domain(host)) = url.host() {
+        let port = url.port_or_known_default().ok_or_else(|| {
+            AppError::InvalidRequest("external_request URL must include a port".to_string())
+        })?;
+        let resolved = tokio::net::lookup_host((host, port)).await.map_err(|e| {
+            AppError::InvalidRequest(format!("external_request DNS lookup failed: {}", e))
+        })?;
+        for addr in resolved {
+            if is_blocked_external_ip(addr.ip()) {
+                return Err(AppError::InvalidRequest(
+                    "external_request refuses hosts resolving to private or local IPs".to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(url)
 }
 
 #[cfg(test)]
@@ -121,6 +207,46 @@ mod tests {
         // 300..399 redirects are explicitly not "ok" by this convention.
         let r = json_result(301, "Moved", serde_json::json!(null));
         assert!(!r.ok);
+    }
+
+    #[test]
+    fn external_url_shape_requires_https() {
+        let err = validate_external_url_shape("http://api.example.com/models").unwrap_err();
+        assert!(err.to_string().contains("only allows https"));
+    }
+
+    #[test]
+    fn external_url_shape_rejects_localhost() {
+        let err = validate_external_url_shape("https://service.localhost/path").unwrap_err();
+        assert!(err.to_string().contains("localhost"));
+    }
+
+    #[test]
+    fn external_url_shape_rejects_private_ip_literals() {
+        for raw in [
+            "https://127.0.0.1/status",
+            "https://10.0.0.1/status",
+            "https://172.16.0.1/status",
+            "https://192.168.1.1/status",
+            "https://169.254.169.254/latest/meta-data",
+            "https://[::1]/status",
+            "https://[fc00::1]/status",
+            "https://[fe80::1]/status",
+        ] {
+            let err = validate_external_url_shape(raw).unwrap_err();
+            assert!(
+                err.to_string().contains("private or local")
+                    || err.to_string().contains("localhost"),
+                "unexpected error for {raw}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn external_url_shape_accepts_public_https_hosts() {
+        let url = validate_external_url_shape("https://api.example.com/v1/models").unwrap();
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.host_str(), Some("api.example.com"));
     }
 }
 
@@ -254,12 +380,14 @@ pub async fn api_request(
 #[tauri::command]
 pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult, AppError> {
     let method = input.method.as_deref().unwrap_or("GET");
+    let target_url = validate_external_url(&input.path).await?;
 
     let client = reqwest::Client::builder()
         .timeout(EXTERNAL_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
         .build()?;
 
-    let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), &input.path);
+    let mut req = client.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
 
     if let Some(ref headers) = input.headers {
         for (key, value) in headers {
