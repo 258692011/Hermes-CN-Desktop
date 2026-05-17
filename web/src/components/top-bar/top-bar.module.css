@@ -51,9 +51,3 @@
   background: var(--h-bg-soft);
 }
 
-.accentDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--h-text-3);
-}

@@ -35,14 +35,5 @@ export function TopBarActionButton({
 }
 
 export function TopBarActions() {
-  return (
-    <>
-      <TopBarActionButton>⌘ K · 切换</TopBarActionButton>
-      <TopBarActionButton>
-        <span className={s.accentDot} />
-        <span>提交</span>
-        <span>▾</span>
-      </TopBarActionButton>
-    </>
-  );
+  return null;
 }
