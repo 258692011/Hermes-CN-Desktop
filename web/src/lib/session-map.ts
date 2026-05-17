@@ -9,12 +9,34 @@ interface SessionEntry {
 
 type SessionMap = Record<string, SessionEntry>;
 
+let cachedStorage: Storage | null = null;
+let cachedRaw: string | null | undefined;
+let cachedMap: SessionMap = {};
+
+function prepareCache(storage: Storage): void {
+  if (cachedStorage === storage) return;
+  cachedStorage = storage;
+  cachedRaw = undefined;
+  cachedMap = {};
+}
+
 function readMap(): SessionMap {
+  const storage = window.localStorage;
+  prepareCache(storage);
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
+    const raw = storage.getItem(STORAGE_KEY);
+    if (raw === cachedRaw) return cachedMap;
+    if (!raw) {
+      cachedRaw = raw;
+      cachedMap = {};
+      return cachedMap;
+    }
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
+    if (!parsed || typeof parsed !== "object") {
+      cachedRaw = raw;
+      cachedMap = {};
+      return cachedMap;
+    }
 
     if (typeof Object.values(parsed)[0] === "string") {
       const migrated: SessionMap = {};
@@ -27,15 +49,24 @@ function readMap(): SessionMap {
       return migrated;
     }
 
-    return parsed as SessionMap;
+    cachedRaw = raw;
+    cachedMap = parsed as SessionMap;
+    return cachedMap;
   } catch {
-    return {};
+    cachedRaw = undefined;
+    cachedMap = {};
+    return cachedMap;
   }
 }
 
 function writeMap(map: SessionMap) {
+  const storage = window.localStorage;
+  prepareCache(storage);
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
+    const raw = JSON.stringify(map);
+    storage.setItem(STORAGE_KEY, raw);
+    cachedRaw = raw;
+    cachedMap = map;
   } catch {}
 }
 

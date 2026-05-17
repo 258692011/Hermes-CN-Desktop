@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   rememberSessionMapping,
   resolveGatewaySessionId,
@@ -14,6 +14,11 @@ describe("session-map", () => {
         setItem: (key: string, value: string) => store.set(key, value),
       },
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("maps gateway session ids to persistent session ids", () => {
@@ -69,6 +74,20 @@ describe("session-map", () => {
     window.localStorage.setItem("hermes:gateway-session-map", "not valid json{{{");
     expect(resolvePersistentSessionId("gw-1")).toBe("gw-1");
     expect(resolveGatewaySessionId("sess-1")).toBeUndefined();
+  });
+
+  it("reuses parsed map while localStorage value is unchanged", () => {
+    window.localStorage.setItem(
+      "hermes:gateway-session-map",
+      '{"gw-1":{"persistentId":"sess-1","ts":9999999999999}}',
+    );
+    const parseSpy = vi.spyOn(JSON, "parse");
+
+    expect(resolvePersistentSessionId("gw-1")).toBe("sess-1");
+    expect(resolveGatewaySessionId("sess-1")).toBe("gw-1");
+    expect(resolvePersistentSessionId("gw-1")).toBe("sess-1");
+
+    expect(parseSpy).toHaveBeenCalledTimes(1);
   });
 
   it("no-ops when gateway and persistent ids are the same", () => {
