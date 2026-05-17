@@ -157,12 +157,10 @@
 
 .navItem[data-empty="true"] {
   color: var(--h-text-3);
-  font-style: italic;
 }
 
 .navItem[data-empty="true"]:hover {
   color: var(--h-text-2);
-  font-style: normal;
 }
 
 .navIcon {

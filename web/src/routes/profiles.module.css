@@ -169,7 +169,6 @@
 
 .metaCellMuted {
   color: color-mix(in srgb, var(--h-text-3) 70%, transparent);
-  font-style: italic;
 }
 
 .rowActions {

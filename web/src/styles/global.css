@@ -20,7 +20,7 @@ html {
 }
 
 body {
-  font-family: var(--h-font-cn);
+  font-family: var(--h-font-ui);
   font-size: var(--h-fs);
   line-height: var(--h-lh);
   background: var(--h-bg-app);

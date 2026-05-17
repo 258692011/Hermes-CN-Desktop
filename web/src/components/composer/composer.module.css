@@ -1,6 +1,6 @@
 .wrapper {
   background: var(--h-bg-pane);
-  font-family: var(--h-font-cn);
+  font-family: var(--h-font-ui);
 }
 
 .box {
@@ -22,7 +22,7 @@
   color: var(--h-text);
   font-size: 13px;
   line-height: 1.55;
-  font-family: var(--h-font-cn);
+  font-family: var(--h-font-ui);
 }
 
 .controls {

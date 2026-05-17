@@ -10,7 +10,7 @@
   overflow: hidden;
   background: var(--h-bg-app);
   color: var(--h-text);
-  font-family: var(--h-font-cn);
+  font-family: var(--h-font-ui);
 }
 
 .topbarSlot {

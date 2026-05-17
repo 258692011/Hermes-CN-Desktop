@@ -224,7 +224,7 @@
 }
 
 .box[data-variant="big"] .textarea::placeholder {
-  font-style: italic;
+  font-style: normal;
 }
 
 .bigHeader {

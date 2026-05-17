@@ -30,11 +30,11 @@
 
 .title {
   margin: 0;
-  font-family: var(--h-font-serif);
+  font-family: var(--h-font-display-cn);
   /* CN locale: never italic — west italic on CJK glyphs looks broken.
      Prototype uses persimmon-bold em as the "accent" instead. */
   font-style: normal;
-  font-weight: 300;
+  font-weight: 400;
   font-size: 56px;
   line-height: 1.05;
   letter-spacing: -0.015em;
@@ -44,7 +44,7 @@
 .title em {
   font-style: normal;
   color: var(--persimmon);
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .greet {

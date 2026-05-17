@@ -38,12 +38,12 @@
 
 .title {
   margin: 0;
-  font-family: var(--h-font-serif);
+  font-family: var(--h-font-ui);
   font-style: normal;
-  font-weight: 300;
-  font-size: 48px;
+  font-weight: 650;
+  font-size: 34px;
   line-height: 1.1;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color: var(--bone-100);
 }
 
@@ -75,10 +75,10 @@
 
 .sectionTitle {
   margin: 0;
-  font-family: var(--h-font-serif);
+  font-family: var(--h-font-ui);
   font-style: normal;
-  font-weight: 400;
-  font-size: 20px;
+  font-weight: 650;
+  font-size: 16px;
   color: var(--bone-100);
 }
 

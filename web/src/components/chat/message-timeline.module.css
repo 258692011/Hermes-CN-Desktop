@@ -342,9 +342,9 @@
   border: 0;
   background: transparent;
   color: var(--h-text-2);
-  font-family: var(--h-font-serif);
-  font-size: 13.5px;
-  line-height: 1.78;
+  font-family: var(--h-font-ui);
+  font-size: 13px;
+  line-height: 1.72;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-variant-east-asian: proportional-width;
@@ -826,7 +826,7 @@
   margin: 10px 0 0 2px;
   color: var(--h-text-3);
   font-size: 12px;
-  font-style: italic;
+  font-style: normal;
 }
 
 .empty {
