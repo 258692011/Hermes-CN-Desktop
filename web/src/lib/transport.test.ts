@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { debugBus } from "./debug-bus";
-import { fetchExternalJSON, fetchJSON } from "./transport";
+import { fetchExternalJSON, fetchJSON, uploadAttachmentFile } from "./transport";
 
 type PushArg = Parameters<typeof debugBus.push>[0];
 
@@ -39,6 +39,10 @@ describe("transport · debug-bus integration", () => {
   afterEach(() => {
     pushSpy.mockRestore();
     globalThis.fetch = originalFetch;
+    delete window.__HERMES_RUNTIME__;
+    delete window.__HERMES_SESSION_TOKEN__;
+    delete window.__TAURI_INTERNALS__;
+    delete window.hermesDesktop;
   });
 
   function stubFetch(impl: () => Response | Promise<Response>) {
@@ -102,5 +106,88 @@ describe("transport · debug-bus integration", () => {
 
     const restPushes = restPushesFrom(pushSpy);
     expect(restPushes.length).toBeGreaterThan(0);
+  });
+
+  it("fetchExternalJSON uses desktop externalRequest capability on Tauri", async () => {
+    const externalRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      body: '{"models":[{"id":"m1"}]}',
+    }));
+    globalThis.fetch = vi.fn(async () => makeResponse(500, "should not fetch")) as unknown as typeof globalThis.fetch;
+    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request: vi.fn(),
+      externalRequest,
+    };
+
+    const out = await fetchExternalJSON<{ models: Array<{ id: string }> }>(
+      "https://provider.example/v1/models",
+      { method: "POST", headers: { "X-Test": "1" }, body: '{"q":1}' },
+    );
+
+    expect(out).toEqual({ models: [{ id: "m1" }] });
+    expect(externalRequest).toHaveBeenCalledWith({
+      path: "https://provider.example/v1/models",
+      method: "POST",
+      headers: { "X-Test": "1" },
+      body: '{"q":1}',
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("uploadAttachmentFile uses desktop uploadFile capability on Tauri", async () => {
+    const uploadFile = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      body: JSON.stringify({
+        ok: true,
+        filename: "hello.txt",
+        path: "/tmp/hello.txt",
+        size: 5,
+        mime_type: "text/plain",
+      }),
+    }));
+    window.__HERMES_RUNTIME__ = { platform: "tauri" };
+    window.hermesDesktop = {
+      windowType: "tauri",
+      request: vi.fn(),
+      uploadFile,
+    };
+    const onProgress = vi.fn();
+
+    const out = await uploadAttachmentFile(
+      "session-1",
+      new File(["hello"], "hello.txt", { type: "text/plain" }),
+      onProgress,
+    );
+
+    expect(out).toMatchObject({
+      ok: true,
+      filename: "hello.txt",
+      path: "/tmp/hello.txt",
+      size: 5,
+      mime_type: "text/plain",
+    });
+    expect(uploadFile).toHaveBeenCalledOnce();
+    const [uploadInput] = uploadFile.mock.calls[0] as unknown as [{
+      sessionId: string;
+      name: string;
+      type?: string;
+      data: ArrayBuffer;
+    }];
+    expect(uploadInput).toMatchObject({
+      sessionId: "session-1",
+      name: "hello.txt",
+      type: "text/plain",
+    });
+    expect(uploadInput.data).toBeInstanceOf(ArrayBuffer);
+    expect(onProgress).toHaveBeenNthCalledWith(1, 0);
+    expect(onProgress).toHaveBeenNthCalledWith(2, 100);
   });
 });

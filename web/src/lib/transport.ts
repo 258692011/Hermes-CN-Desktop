@@ -126,8 +126,9 @@ export async function fetchExternalJSON<T>(
   parser?: Parser<T>,
 ): Promise<T> {
   const headers = (init?.headers as Record<string, string>) ?? {};
-  if (runtime.platform === "electron" && window.hermesDesktop?.externalRequest) {
-    const result = await window.hermesDesktop.externalRequest({
+  const externalRequest = window.hermesDesktop?.externalRequest;
+  if (externalRequest) {
+    const result = await externalRequest({
       path: url,
       method: init?.method,
       headers,
@@ -183,10 +184,11 @@ export function uploadAttachmentFile(
   file: File,
   onProgress?: (percent: number) => void,
 ): Promise<AttachmentUploadResult> {
-  if (runtime.platform === "electron" && window.hermesDesktop?.uploadFile) {
+  const uploadFile = window.hermesDesktop?.uploadFile;
+  if (uploadFile) {
     return file.arrayBuffer().then(async (data) => {
       onProgress?.(0);
-      const result = await window.hermesDesktop!.uploadFile!({
+      const result = await uploadFile({
         sessionId,
         name: file.name,
         type: file.type || undefined,
