@@ -45,7 +45,7 @@ async function ensureInvoke() {
 }
 
 const tauriBridge = {
-  windowType: "electron" as const,
+  windowType: "tauri" as const,
 
   async request(input: ApiRequestInput): Promise<ApiRequestResult> {
     const inv = await ensureInvoke();

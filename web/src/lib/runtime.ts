@@ -42,7 +42,7 @@ declare global {
       transport?: "ws" | "sse";
     };
     hermesDesktop?: {
-      windowType: "electron";
+      windowType: "electron" | "tauri";
       request(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       externalRequest?(input: ElectronApiRequestInput): Promise<ElectronApiRequestResult>;
       uploadFile?(input: FileUploadInput): Promise<ElectronApiRequestResult>;
