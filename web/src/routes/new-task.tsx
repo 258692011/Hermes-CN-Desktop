@@ -293,8 +293,9 @@ export function NewTaskRoute() {
       }
     } catch (err) {
       console.error("Failed to create session:", err);
-      setSending(false);
       throw err;
+    } finally {
+      setSending(false);
     }
   }, [
     sending,

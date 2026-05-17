@@ -72,6 +72,13 @@
   line-height: 1.6;
 }
 
+.approvalError {
+  margin-bottom: 12px;
+  color: var(--h-err, #c44);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .approvalActions {
   display: flex;
   gap: 8px;
@@ -84,6 +91,12 @@
   font-family: var(--h-font-cn);
   font-size: 12px;
   padding: 6px 14px;
+}
+
+.approvalApprove:disabled,
+.approvalDeny:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .approvalApprove {

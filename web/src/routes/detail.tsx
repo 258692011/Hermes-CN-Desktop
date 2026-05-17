@@ -488,16 +488,27 @@ export function DetailRoute() {
 
 function ApprovalDialog({ approval }: { approval: { requestId: string; sessionId: string; command: string; reason?: string } }) {
   const removeApproval = useSetAtom(removeApprovalAtom);
+  const [responding, setResponding] = useState<"approve" | "deny" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const respond = async (choice: "approve" | "deny") => {
+    if (responding) return;
+    setResponding(choice);
+    setError(null);
     try {
       await getGatewayClient().request("approval.respond", {
         session_id: approval.sessionId,
         request_id: approval.requestId,
         choice,
       });
-    } catch {}
-    removeApproval({ sessionId: approval.sessionId, requestId: approval.requestId });
+      removeApproval({ sessionId: approval.sessionId, requestId: approval.requestId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Failed to respond to approval:", err);
+      setError(message || "审批响应发送失败");
+    } finally {
+      setResponding(null);
+    }
   };
 
   return (
@@ -505,9 +516,14 @@ function ApprovalDialog({ approval }: { approval: { requestId: string; sessionId
       <div className={s.approvalHeader}>⚠ 需要确认执行</div>
       <div className={s.approvalCommand}>{approval.command}</div>
       {approval.reason && <div className={s.approvalReason}>{approval.reason}</div>}
+      {error && <div className={s.approvalError}>发送失败：{error}</div>}
       <div className={s.approvalActions}>
-        <button className={s.approvalApprove} onClick={() => respond("approve")}>允许执行</button>
-        <button className={s.approvalDeny} onClick={() => respond("deny")}>拒绝</button>
+        <button className={s.approvalApprove} onClick={() => respond("approve")} disabled={responding !== null}>
+          {responding === "approve" ? "发送中..." : "允许执行"}
+        </button>
+        <button className={s.approvalDeny} onClick={() => respond("deny")} disabled={responding !== null}>
+          {responding === "deny" ? "发送中..." : "拒绝"}
+        </button>
       </div>
     </div>
   );
