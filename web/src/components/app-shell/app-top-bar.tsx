@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Search, SunMoon } from "lucide-react";
+import { Moon, Search, Sun } from "lucide-react";
+import { useTheme } from "@hermes/shared-ui";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { TOP_TABS } from "./use-active-top-tab";
@@ -8,11 +9,19 @@ import s from "./app-top-bar.module.css";
 export function AppTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { config: themeConfig, update: updateTheme } = useTheme();
+  const nextTheme = themeConfig.theme === "dark" ? "light" : "dark";
+  const ThemeIcon = themeConfig.theme === "dark" ? Sun : Moon;
+  const themeToggleLabel = themeConfig.theme === "dark" ? "切换到浅色模式" : "切换到深色模式";
 
   return (
     <header className={s.topbar} data-window-drag data-tauri-drag-region="deep">
       <div className={s.brand} aria-label="Hermes Agent CN">
-        <HermesLogoMark className={s.brandMark} size={22} />
+        <HermesLogoMark
+          className={s.brandMark}
+          size={22}
+          tone={themeConfig.theme === "light" ? "dark" : "light"}
+        />
         <span className={s.wordmark}>
           Hermes <em>Agent</em>
         </span>
@@ -54,11 +63,12 @@ export function AppTopBar() {
         <button
           type="button"
           className={s.iconBtn}
-          onClick={() => {}}
-          title="切换浅色 / 深色模式（暂未实装）"
-          aria-label="切换浅色 / 深色模式（暂未实装）"
+          onClick={() => updateTheme({ theme: nextTheme })}
+          title={themeToggleLabel}
+          aria-label={themeToggleLabel}
+          data-theme-mode={themeConfig.theme}
         >
-          <SunMoon size={14} />
+          <ThemeIcon size={14} />
         </button>
       </div>
     </header>

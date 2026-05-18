@@ -30,7 +30,7 @@
   font-size: 9.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   padding-top: 6px;
 }
 
@@ -56,7 +56,7 @@
   font-family: var(--h-font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   text-transform: uppercase;
 }
 
@@ -66,18 +66,18 @@
   font-style: normal;
   font-weight: 650;
   font-size: 20px;
-  color: var(--bone-100);
+  color: var(--h-text);
   letter-spacing: 0;
 }
 
 .sectionMeta {
   font-family: var(--h-font-mono);
   font-size: 11px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
 }
 
 .sectionMeta a {
-  color: var(--persimmon);
+  color: var(--h-accent);
   text-decoration: none;
 }
 

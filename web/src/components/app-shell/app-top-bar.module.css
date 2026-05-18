@@ -8,7 +8,7 @@
   padding: var(--h-window-control-safe-top, 0px) 14px 0;
   gap: 16px;
   border-bottom: 1px solid var(--h-line);
-  background: linear-gradient(180deg, var(--ink-100), var(--ink-050));
+  background: linear-gradient(180deg, var(--h-bg-pane), var(--h-bg-app));
   position: relative;
   z-index: 10;
   -webkit-app-region: drag;
@@ -28,7 +28,7 @@
   font-style: normal;
   font-size: 17px;
   font-weight: 400;
-  color: var(--bone-100);
+  color: var(--h-text);
   letter-spacing: -0.02em;
   user-select: none;
 }
@@ -37,7 +37,6 @@
   display: block;
   flex-shrink: 0;
   border-radius: 5px;
-  filter: drop-shadow(0 5px 10px rgba(0, 0, 0, 0.35));
 }
 
 .wordmark {
@@ -46,7 +45,7 @@
 }
 
 .wordmark em {
-  color: var(--persimmon);
+  color: var(--h-accent);
   font-style: normal;
 }
 
@@ -54,7 +53,7 @@
   font-family: var(--h-font-cn);
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--bone-300);
+  color: var(--h-text-2);
   font-style: normal;
   letter-spacing: 0.04em;
   white-space: nowrap;
@@ -88,23 +87,23 @@
 
 .navLink:hover {
   color: var(--h-text);
-  background: var(--ink-300);
+  background: var(--h-bg-soft);
 }
 
 .navLink[data-active="true"] {
-  color: var(--bone-100);
-  background: var(--ink-300);
+  color: var(--h-text);
+  background: var(--h-bg-soft);
 }
 
 .navNum {
   font-size: 9px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   margin-right: 6px;
   font-feature-settings: "tnum";
 }
 
 .navLink[data-active="true"] .navNum {
-  color: var(--persimmon);
+  color: var(--h-accent);
 }
 
 .search {
@@ -113,7 +112,7 @@
   max-width: 360px;
   margin-left: auto;
   height: 28px;
-  background: var(--ink-200);
+  background: var(--h-bg-soft);
   border: 1px solid var(--h-line);
   border-radius: 3px;
   display: flex;
@@ -131,9 +130,9 @@
   margin-left: auto;
   font-family: var(--h-font-mono);
   font-size: 9.5px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   border: 1px solid var(--h-line);
-  background: var(--ink-100);
+  background: var(--h-bg-pane);
   padding: 1px 4px;
   border-radius: 2px;
   letter-spacing: 0.04em;
@@ -162,12 +161,20 @@
 
 .iconBtn:hover {
   color: var(--h-text);
-  background: var(--ink-300);
+  background: var(--h-bg-soft);
   border-color: var(--h-line);
 }
 
 .iconBtn[data-active="true"] {
-  color: var(--bone-100);
-  background: var(--ink-300);
+  color: var(--h-text);
+  background: var(--h-bg-soft);
   border-color: var(--h-line);
+}
+
+.iconBtn[data-theme-mode="dark"] {
+  color: var(--amber);
+}
+
+.iconBtn[data-theme-mode="light"] {
+  color: var(--sky);
 }

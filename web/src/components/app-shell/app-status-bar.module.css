@@ -11,7 +11,7 @@
   line-height: 1;
   color: var(--h-text-2);
   border-top: 1px solid var(--h-line);
-  background: var(--ink-100);
+  background: var(--h-bg-pane);
 }
 
 .stat {
@@ -28,7 +28,7 @@
 
 .lbl {
   display: inline-block;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 9px;
@@ -37,7 +37,7 @@
 
 .val {
   display: inline-block;
-  color: var(--bone-200);
+  color: var(--h-text);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -80,5 +80,5 @@
 }
 
 .dot[data-state="unknown"] {
-  background: var(--bone-600);
+  background: var(--h-text-3);
 }

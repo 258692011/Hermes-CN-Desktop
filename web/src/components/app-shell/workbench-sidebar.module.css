@@ -2,7 +2,7 @@
 
 .sidebar {
   height: 100%;
-  background: var(--ink-100);
+  background: var(--h-bg-pane);
   border-right: 1px solid var(--h-line);
   display: flex;
   flex-direction: column;
@@ -73,7 +73,7 @@
 .searchRow {
   margin: 0 12px 10px;
   height: 28px;
-  background: var(--ink-200);
+  background: var(--h-bg-soft);
   border: 1px solid var(--h-line);
   border-radius: 3px;
   display: flex;
@@ -89,7 +89,7 @@
 
 .searchRow:hover {
   color: var(--h-text);
-  background: var(--ink-300);
+  background: var(--h-bg-chip);
 }
 
 .searchLead {
@@ -101,9 +101,9 @@
 .searchKbd {
   font-family: var(--h-font-mono);
   font-size: 9.5px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   border: 1px solid var(--h-line);
-  background: var(--ink-100);
+  background: var(--h-bg-pane);
   padding: 1px 5px;
   border-radius: 2px;
   letter-spacing: 0.04em;
@@ -132,7 +132,7 @@
   padding: 10px 16px 6px 16px;
   font-family: var(--h-font-mono);
   font-size: 9.5px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -157,12 +157,12 @@
 }
 
 .sessionRow:hover {
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--h-bg-soft);
 }
 
 .sessionRow[data-active="true"] {
-  background: var(--ink-300);
-  border-left-color: var(--persimmon);
+  background: var(--h-bg-chip);
+  border-left-color: var(--h-accent);
 }
 
 .ttl {
@@ -181,11 +181,11 @@
   height: 5px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--bone-600);
+  background: var(--h-text-3);
 }
 
 .dot[data-state="live"] {
-  background: var(--persimmon);
+  background: var(--h-accent);
   box-shadow: 0 0 0 3px rgba(255, 122, 61, 0.18);
 }
 
@@ -204,7 +204,7 @@
   gap: 8px;
   font-family: var(--h-font-mono);
   font-size: 10px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
 }
 
 .sideItem {
@@ -228,19 +228,19 @@
 
 .sideItem:hover {
   color: var(--h-text);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--h-bg-soft);
 }
 
 .sideItem[data-active="true"] {
-  color: var(--bone-100);
-  background: var(--ink-300);
-  border-left-color: var(--persimmon);
+  color: var(--h-text);
+  background: var(--h-bg-chip);
+  border-left-color: var(--h-accent);
 }
 
 .sideItemIcon {
   width: 14px;
   height: 14px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -248,7 +248,7 @@
 }
 
 .sideItem[data-active="true"] .sideItemIcon {
-  color: var(--persimmon);
+  color: var(--h-accent);
 }
 
 .sideItemLabel {
@@ -260,6 +260,6 @@
 .empty {
   padding: 8px 16px;
   font-size: 11px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   font-family: var(--h-font-mono);
 }

@@ -3,7 +3,7 @@
 
 .sidebar {
   height: 100%;
-  background: var(--ink-100);
+  background: var(--h-bg-pane);
   border-right: 1px solid var(--h-line);
   display: flex;
   flex-direction: column;
@@ -51,7 +51,7 @@
   padding: 10px 16px 6px 16px;
   font-family: var(--h-font-mono);
   font-size: 9.5px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -81,19 +81,19 @@
 
 .item:hover {
   color: var(--h-text);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--h-bg-soft);
 }
 
 .item[data-active="true"] {
-  color: var(--bone-100);
-  background: var(--ink-300);
-  border-left-color: var(--persimmon);
+  color: var(--h-text);
+  background: var(--h-bg-chip);
+  border-left-color: var(--h-accent);
 }
 
 .itemIcon {
   width: 14px;
   height: 14px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -101,7 +101,7 @@
 }
 
 .item[data-active="true"] .itemIcon {
-  color: var(--persimmon);
+  color: var(--h-accent);
 }
 
 .itemLabel {
@@ -114,6 +114,6 @@
 .itemPath {
   font-family: var(--h-font-mono);
   font-size: 9.5px;
-  color: var(--bone-600);
+  color: var(--h-text-3);
   letter-spacing: 0.02em;
 }
