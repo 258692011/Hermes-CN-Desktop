@@ -91,20 +91,3 @@
   grid-column: 1 / -1;
   grid-row: 3;
 }
-
-/* Fullscreen mode for settings: no sidebar / statusbar, route gets entire area. */
-.shell[data-fullscreen="true"] {
-  grid-template-rows: 1fr;
-  grid-template-columns: 1fr;
-}
-
-.shell[data-fullscreen="true"] .topbarSlot,
-.shell[data-fullscreen="true"] .sidebarSlot,
-.shell[data-fullscreen="true"] .statusbarSlot {
-  display: none;
-}
-
-.shell[data-fullscreen="true"] .mainSlot {
-  grid-column: 1;
-  grid-row: 1;
-}

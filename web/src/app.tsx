@@ -16,9 +16,9 @@ import { ProfilesRoute } from "@/routes/profiles";
 import { CronRoute } from "@/routes/cron";
 import { HealthRoute } from "@/routes/health";
 import { LogsRoute } from "@/routes/logs";
-import { SettingsRoute } from "@/routes/settings";
 import { DebugRoute } from "@/routes/debug";
 import { AnalyticsRoute } from "@/routes/analytics";
+import { AdvancedRoute } from "@/routes/advanced";
 import { DevPrimitivesRoute } from "@/routes/dev-primitives";
 
 function NewTaskRedirect() {
@@ -51,7 +51,8 @@ export function App() {
           <Route path="/analytics" element={<AnalyticsRoute />} />
           <Route path="/logs" element={<LogsRoute />} />
           <Route path="/debug" element={<DebugRoute />} />
-          <Route path="/settings" element={<ErrorBoundary><SettingsRoute /></ErrorBoundary>} />
+          <Route path="/advanced/*" element={<ErrorBoundary><AdvancedRoute /></ErrorBoundary>} />
+          <Route path="/settings" element={<Navigate to="/advanced" replace />} />
           {import.meta.env.DEV && (
             <Route path="/dev/primitives" element={<DevPrimitivesRoute />} />
           )}

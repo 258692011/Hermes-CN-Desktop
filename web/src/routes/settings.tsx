@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useAtom } from "jotai";
-import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, FolderOpen, RefreshCw } from "lucide-react";
+import { FolderOpen, RefreshCw } from "lucide-react";
 import { useTheme, type ThemeConfig } from "@hermes/shared-ui";
 import { useConfig, useConfigSchema, useSaveConfig } from "@/hooks/use-config";
 import { useSkills, useToggleSkill } from "@/hooks/use-skills";
@@ -16,74 +15,22 @@ import {
 } from "@/hooks/use-runtime-update";
 import { showReasoningAtom } from "@/stores/ui";
 import { postJSON } from "@/lib/transport";
-import { TopBarActions } from "@/components/top-bar/top-bar";
 import type { ConfigSchemaField, RuntimeInfo, RuntimeUpdateCheckResult } from "@hermes/protocol";
 import s from "./settings.module.css";
 
-type Section = "general" | "config" | "about";
-
-const SECTIONS: { id: Section; label: string }[] = [
-  { id: "general", label: "常规" },
-  { id: "config", label: "配置" },
-  { id: "about", label: "关于" },
-];
-
-export function SettingsRoute() {
-  const [section, setSection] = useState<Section>("general");
-  const navigate = useNavigate();
-  const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from;
-  const returnTarget = from && !from.startsWith("/settings") ? from : "/";
-
-  return (
-    <div className={s.page}>
-      <div className={s.settingsTopBar} data-window-drag data-tauri-drag-region="deep">
-        <button
-          className={s.settingsBackIconButton}
-          aria-label="返回对话"
-          title="返回对话"
-          onClick={() => navigate(returnTarget)}
-        >
-          <ArrowLeft size={15} strokeWidth={2} aria-hidden="true" />
-        </button>
-        <span className={s.settingsTitle}>设置</span>
-        <span className={s.settingsTopBarSpacer} />
-        <div className={s.settingsTopBarActions}>
-          <TopBarActions />
-        </div>
-      </div>
-      <div className={s.layout}>
-        <nav className={s.nav}>
-          {SECTIONS.map((sec) => (
-            <button
-              key={sec.id}
-              className={s.navItem}
-              data-active={sec.id === section}
-              onClick={() => setSection(sec.id)}
-            >
-              {sec.label}
-            </button>
-          ))}
-        </nav>
-        <div className={s.content}>
-          {section === "general" && <GeneralSection />}
-          {section === "config" && <ConfigSection />}
-          {section === "about" && <AboutSection />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── General ─────────────────────────────────────────────────────────── */
 
-function GeneralSection() {
+interface SettingsSectionProps {
+  showHeading?: boolean;
+}
+
+export function GeneralSection({ showHeading = true }: SettingsSectionProps) {
   const { config, update } = useTheme();
   const [showReasoning, setShowReasoning] = useAtom(showReasoningAtom);
 
   return (
     <div>
-      <h2 className={s.heading}>常规</h2>
+      {showHeading && <h2 className={s.heading}>常规</h2>}
       <Row label="主题" right={
         <RadioGroup value={config.theme} options={[{ value: "light", label: "浅色" }, { value: "dark", label: "深色" }]} onChange={(v) => update({ theme: v as ThemeConfig["theme"] })} />
       } />
@@ -106,7 +53,7 @@ const CATEGORY_CN: Record<string, string> = {
   logging: "日志记录", discord: "Discord", auxiliary: "辅助",
 };
 
-function ConfigSection() {
+export function ConfigSection({ showHeading = true }: SettingsSectionProps) {
   const { data: config } = useConfig();
   const { data: schema } = useConfigSchema();
   const saveConfig = useSaveConfig();
@@ -150,7 +97,7 @@ function ConfigSection() {
 
   return (
     <div>
-      <h2 className={s.heading}>配置</h2>
+      {showHeading && <h2 className={s.heading}>配置</h2>}
       <p className={s.desc}>
         Hermes Agent 全部 {Object.keys(schema.fields).length} 个配置项，
         共 {categories.length} 个分类。修改后点击字段旁的"保存"按钮生效。
@@ -412,7 +359,7 @@ function FilterGroup({ label, children }: { label: string; children: React.React
 
 /* ── About ───────────────────────────────────────────────────────────── */
 
-function AboutSection() {
+export function AboutSection({ showHeading = true }: SettingsSectionProps) {
   const { data: status } = useStatus();
   const runtimeInfo = useRuntimeInfo();
   const checkRuntimeUpdate = useCheckRuntimeUpdate();
@@ -480,7 +427,7 @@ function AboutSection() {
 
   return (
     <div>
-      <h2 className={s.heading}>关于</h2>
+      {showHeading && <h2 className={s.heading}>关于</h2>}
       <div className={s.aboutText}>
         <div><b>Hermes Agent</b> · {status?.version ?? "…"} ({status?.release_date ?? ""})</div>
         <div>Gateway: {status?.gateway_state ?? "unknown"} {status?.gateway_pid ? `(PID ${status.gateway_pid})` : ""}</div>

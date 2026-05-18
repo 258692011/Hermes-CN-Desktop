@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Search, Settings } from "lucide-react";
+import { Search, SunMoon } from "lucide-react";
 import { HermesLogoMark } from "@/components/brand/hermes-logo-mark";
 import { ProfileSelector } from "@/components/sidebar/profile-selector";
 import { TOP_TABS } from "./use-active-top-tab";
@@ -54,12 +54,11 @@ export function AppTopBar() {
         <button
           type="button"
           className={s.iconBtn}
-          onClick={() => navigate("/settings")}
-          data-active={location.pathname.startsWith("/settings") ? "true" : undefined}
-          title="设置"
-          aria-label="设置"
+          onClick={() => {}}
+          title="切换浅色 / 深色模式（暂未实装）"
+          aria-label="切换浅色 / 深色模式（暂未实装）"
         >
-          <Settings size={14} />
+          <SunMoon size={14} />
         </button>
       </div>
     </header>

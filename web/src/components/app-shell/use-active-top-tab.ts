@@ -4,7 +4,8 @@ export type TopTab =
   | "workbench"
   | "skills"
   | "automation"
-  | "observability";
+  | "observability"
+  | "advanced";
 
 export interface TopTabDef {
   id: TopTab;
@@ -55,8 +56,14 @@ export const TOP_TABS: readonly TopTabDef[] = [
       path.startsWith("/analytics") ||
       path.startsWith("/logs") ||
       path.startsWith("/debug") ||
-      path.startsWith("/settings") ||
       path.startsWith("/dev/primitives"),
+  },
+  {
+    id: "advanced",
+    num: "05",
+    label: "高级",
+    href: "/advanced",
+    matches: (path) => path.startsWith("/advanced") || path.startsWith("/settings"),
   },
 ];
 

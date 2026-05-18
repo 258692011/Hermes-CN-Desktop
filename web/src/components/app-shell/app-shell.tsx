@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useLocation } from "react-router-dom";
 import { AppTopBar } from "./app-top-bar";
 import { AppSidebar } from "./app-sidebar";
 import { AppStatusBar } from "./app-status-bar";
@@ -11,12 +10,8 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
-  const { pathname } = useLocation();
-  // Settings owns its own full-page layout — bypass the shell entirely.
-  const fullscreen = pathname.startsWith("/settings");
-
   return (
-    <div className={s.shell} data-fullscreen={fullscreen ? "true" : undefined}>
+    <div className={s.shell}>
       <div className={s.topbarSlot}>
         <AppTopBar />
       </div>

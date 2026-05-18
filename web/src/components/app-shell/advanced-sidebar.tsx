@@ -1,49 +1,34 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  BarChart3,
-  Bug,
-  FileText,
-  FlaskConical,
-  HeartPulse,
-  type LucideIcon,
-} from "lucide-react";
+import { FileCog, Info, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import s from "./debug-sidebar.module.css";
 
-interface ObservabilityItem {
+interface AdvancedItem {
   label: string;
   path: string;
   icon: LucideIcon;
 }
 
-const ITEMS: readonly ObservabilityItem[] = [
-  { label: "健康检查", path: "/health", icon: HeartPulse },
-  { label: "数据分析", path: "/analytics", icon: BarChart3 },
-  { label: "日志", path: "/logs", icon: FileText },
-  { label: "Debug", path: "/debug", icon: Bug },
-  ...(import.meta.env.DEV
-    ? [
-        {
-          label: "Dev Primitives",
-          path: "/dev/primitives",
-          icon: FlaskConical,
-        } as ObservabilityItem,
-      ]
-    : []),
+const ITEMS: readonly AdvancedItem[] = [
+  { label: "常规", path: "/advanced", icon: SlidersHorizontal },
+  { label: "配置", path: "/advanced/config", icon: FileCog },
+  { label: "关于", path: "/advanced/about", icon: Info },
 ];
 
-export function ObservabilitySidebar() {
+export function AdvancedSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const isActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(path + "/");
+    path === "/advanced"
+      ? location.pathname === "/advanced" || location.pathname === "/advanced/"
+      : location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   return (
-    <aside className={s.sidebar} aria-label="可观测侧栏">
+    <aside className={s.sidebar} aria-label="高级侧栏">
       <div className={s.scrollY}>
         <section className={s.section}>
           <div className={s.label}>
-            <span>§04 · 可观测</span>
+            <span>§05 · 高级</span>
             <span className={s.labelNum}>{ITEMS.length.toString().padStart(2, "0")}</span>
           </div>
           {ITEMS.map((item) => {
