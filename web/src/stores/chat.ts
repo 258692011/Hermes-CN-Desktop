@@ -150,6 +150,14 @@ function reasoningFromParts(parts: HermesMessagePart[]): string {
     .join("");
 }
 
+function looseComparableText(value: string | undefined): string {
+  return (value ?? "")
+    .replace(/\s+/g, "")
+    .replace(/[*_`~]/g, "")
+    .replace(/[，。！？、：；,.!?:;"'“”‘’（）()[\]{}<>《》\-—–]/g, "")
+    .toLowerCase();
+}
+
 function withoutProgressParts(parts: HermesMessagePart[]): HermesMessagePart[] {
   return parts.filter((part) => part.type !== "progress");
 }
@@ -785,6 +793,85 @@ export const resetStreamStateAtom = atom(null, (_get, set, sessionId: string) =>
     })),
   );
 });
+
+function storedAssistantIsAfterTurn(message: HermesUIMessage, turnStartedAt: number | undefined): boolean {
+  if (turnStartedAt === undefined) return true;
+  return message.createdAt >= turnStartedAt - 1_000;
+}
+
+function isRecoverableStoredAssistant(
+  liveAssistant: HermesUIMessage,
+  storedAssistant: HermesUIMessage,
+  turnStartedAt: number | undefined,
+): boolean {
+  if (liveAssistant.role !== "assistant" || storedAssistant.role !== "assistant") return false;
+  if (storedAssistant.status !== "complete") return false;
+  if (!storedAssistantIsAfterTurn(storedAssistant, turnStartedAt)) return false;
+
+  const liveText = looseComparableText(textFromParts(withoutProgressParts(liveAssistant.parts)));
+  const storedText = looseComparableText(textFromParts(storedAssistant.parts));
+  if (liveText && storedText) {
+    return liveText === storedText || (liveText.length >= 4 && storedText.includes(liveText));
+  }
+
+  const liveReasoning = looseComparableText(reasoningFromParts(withoutProgressParts(liveAssistant.parts)));
+  const storedReasoning = looseComparableText(reasoningFromParts(storedAssistant.parts));
+  if (liveReasoning && storedReasoning) {
+    return liveReasoning === storedReasoning ||
+      (liveReasoning.length >= 4 && storedReasoning.includes(liveReasoning));
+  }
+
+  const liveHasOnlyProgress = withoutProgressParts(liveAssistant.parts).length === 0;
+  const storedHasContent = storedText.length > 0 ||
+    storedReasoning.length > 0 ||
+    storedAssistant.parts.some((part) => part.type === "tool");
+  return liveHasOnlyProgress && storedHasContent;
+}
+
+function recoverableAssistantId(
+  runtime: ChatSessionRuntime,
+  storedMessages: HermesUIMessage[],
+): string | undefined {
+  const activeCandidate = runtime.activeAssistantId
+    ? runtime.messages.find((message) => message.id === runtime.activeAssistantId)
+    : undefined;
+  const fallbackCandidate = [...runtime.messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.status === "streaming");
+  const liveAssistant = activeCandidate ?? fallbackCandidate;
+  if (!liveAssistant) return undefined;
+
+  const matched = storedMessages.some((storedMessage) =>
+    isRecoverableStoredAssistant(liveAssistant, storedMessage, runtime.turnStartedAt),
+  );
+  return matched ? liveAssistant.id : undefined;
+}
+
+export const recoverCompletedTurnFromStoredMessagesAtom = atom(
+  null,
+  (_get, set, params: { sessionId: string; storedMessages: HermesUIMessage[]; now?: number }) => {
+    if (params.storedMessages.length === 0) return;
+    const now = params.now ?? Date.now();
+    set(chatRuntimeBySessionAtom, (state) => {
+      const runtime = state[params.sessionId];
+      if (!runtime || !isStreamingStatus(runtime.streamStatus)) return state;
+
+      const assistantId = recoverableAssistantId(runtime, params.storedMessages);
+      if (!assistantId) return state;
+
+      return {
+        ...state,
+        [params.sessionId]: {
+          ...resetStream(runtime, now),
+          messages: runtime.messages.filter((message) => message.id !== assistantId),
+          streamStatus: "complete",
+          pendingApprovals: [],
+          updatedAt: now,
+        },
+      };
+    });
+  },
+);
 
 export const startPromptAtom = atom(
   null,

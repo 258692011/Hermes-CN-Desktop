@@ -351,6 +351,40 @@ describe("message adapter", () => {
     expect(merged[0]?.id).toBe("live-assistant-10");
   });
 
+  it("prefers stored complete assistant over a stale streaming partial", () => {
+    const stored = [
+      uiMessage({
+        id: "stored-2",
+        status: "complete",
+        parts: [
+          {
+            type: "text",
+            text: "我是 **MiniMax-M2.7**，通过 **minimax-cn** provider 运行的。你有什么需要帮忙的吗？",
+          },
+        ],
+      }),
+    ];
+    const live = [
+      uiMessage({
+        id: "live-assistant-10",
+        status: "streaming",
+        parts: [
+          { type: "text", text: "我是 MiniMax-M2.7" },
+          { type: "progress", text: "思考中(耗时较长) 20.4k tokens · MiniMax-M2.7" },
+        ],
+      }),
+    ];
+
+    const merged = mergeHermesUIMessages(stored, live);
+    const chat = hermesUIMessagesToChatMessages(merged);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.id).toBe("stored-2");
+    expect(merged[0]?.status).toBe("complete");
+    expect(chat[0]?.text).toBe("我是 **MiniMax-M2.7**，通过 **minimax-cn** provider 运行的。你有什么需要帮忙的吗？");
+    expect(chat[0]?.blocks?.map((block) => block.type)).toEqual(["text"]);
+  });
+
   // Regression for issue #11: stored builds the assistant from multiple
   // non-adjacent text parts (text → tools → text → ...) so textFromParts
   // joins with "" (no separator). The live path can produce the same

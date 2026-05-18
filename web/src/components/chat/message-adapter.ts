@@ -516,6 +516,13 @@ function comparableText(value: string | undefined): string {
   return (value ?? "").replace(/\s+/g, "");
 }
 
+function looseComparableText(value: string | undefined): string {
+  return comparableText(value)
+    .replace(/[*_`~]/g, "")
+    .replace(/[，。！？、：；,.!?:;"'“”‘’（）()[\]{}<>《》\-—–]/g, "")
+    .toLowerCase();
+}
+
 function canonicalText(message: HermesUIMessage): string {
   return comparableText(textFromParts(message.parts) ?? noticeTextFromParts(message.parts));
 }
@@ -557,7 +564,25 @@ function isSameCanonicalMessage(stored: HermesUIMessage, live: HermesUIMessage):
 
   if (stored.role === "assistant") {
     if (storedText || liveText) {
-      return storedText === liveText;
+      if (storedText === liveText) return true;
+
+      const storedLooseText = looseComparableText(storedText);
+      const liveLooseText = looseComparableText(liveText);
+      if (storedLooseText && liveLooseText && storedLooseText === liveLooseText) {
+        return true;
+      }
+
+      if (
+        stored.status === "complete" &&
+        live.status === "streaming" &&
+        storedLooseText &&
+        liveLooseText.length >= 4 &&
+        storedLooseText.includes(liveLooseText)
+      ) {
+        return true;
+      }
+
+      return false;
     }
     return canonicalToolComparable(stored) !== "" &&
       canonicalToolComparable(stored) === canonicalToolComparable(live);
@@ -612,7 +637,14 @@ export function mergeHermesUIMessages(
     }
 
     usedLiveIndexes.add(liveIndex);
-    merged.push(consolidatedLive[liveIndex]!);
+    const liveMessage = consolidatedLive[liveIndex]!;
+    merged.push(
+      storedMessage.role === "assistant" &&
+        storedMessage.status === "complete" &&
+        liveMessage.status === "streaming"
+        ? storedMessage
+        : liveMessage,
+    );
   }
 
   consolidatedLive.forEach((liveMessage, index) => {

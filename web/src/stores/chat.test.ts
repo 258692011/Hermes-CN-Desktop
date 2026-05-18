@@ -5,6 +5,7 @@ import {
   chatRuntimeBySessionAtom,
   createEmptyChatRuntime,
   drainLiveMessagesAtom,
+  recoverCompletedTurnFromStoredMessagesAtom,
   reduceGatewayEvent,
   startPromptAtom,
   terminateAllStreamsAtom,
@@ -666,6 +667,50 @@ describe("startPromptAtom", () => {
     ]);
     expect(runtime.activeAssistantId).toBe("live-assistant-5");
     expect(runtime.streamStatus).toBe("streaming");
+  });
+
+  it("recovers a stale streaming assistant when stored messages already completed the turn", () => {
+    const store = createStore();
+
+    store.set(startPromptAtom, { sessionId: "s1", text: "你是什么模型?", now: 1_000 });
+    store.set(chatRuntimeBySessionAtom, (state) => ({
+      ...state,
+      s1: reduceGatewayEvent(
+        state.s1,
+        {
+          type: "message.delta",
+          session_id: "s1",
+          payload: { text: "我是 MiniMax-M2.7" },
+        },
+        2_000,
+      ),
+    }));
+
+    store.set(recoverCompletedTurnFromStoredMessagesAtom, {
+      sessionId: "s1",
+      now: 3_000,
+      storedMessages: [
+        runtimeMessage({
+          id: "stored-1",
+          sessionId: "s1",
+          role: "assistant",
+          status: "complete",
+          createdAt: 2_500,
+          parts: [
+            {
+              type: "text",
+              text: "我是 **MiniMax-M2.7**，通过 **minimax-cn** provider 运行的。",
+            },
+          ],
+        }),
+      ],
+    });
+
+    const runtime = store.get(chatRuntimeBySessionAtom).s1;
+    expect(runtime.streamStatus).toBe("complete");
+    expect(runtime.activeAssistantId).toBeUndefined();
+    expect(runtime.turnStartedAt).toBeUndefined();
+    expect(runtime.messages.map((message) => message.id)).toEqual(["live-user-1000"]);
   });
 });
 

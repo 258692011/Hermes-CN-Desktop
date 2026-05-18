@@ -3,7 +3,10 @@ import { useAtom, useSetAtom } from "jotai";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Copy } from "lucide-react";
 import { activeSessionIdAtom } from "@/stores/ui";
-import { removeApprovalAtom } from "@/stores/chat";
+import {
+  recoverCompletedTurnFromStoredMessagesAtom,
+  removeApprovalAtom,
+} from "@/stores/chat";
 import { useSession, useSessionMessages, useSessions } from "@/hooks/use-sessions";
 import { useGateway } from "@/hooks/use-gateway";
 import { useConfig, useModelInfo } from "@/hooks/use-config";
@@ -67,6 +70,7 @@ export function DetailRoute() {
   const [sessionIdCopyState, setSessionIdCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [sessionTitleOverrides, setSessionTitleOverrides] = useState(readSessionTitleOverrides);
   const sessionIdCopyTimer = useRef<number | null>(null);
+  const recoverCompletedTurnFromStoredMessages = useSetAtom(recoverCompletedTurnFromStoredMessagesAtom);
 
   const {
     restSessionId,
@@ -172,17 +176,36 @@ export function DetailRoute() {
     return activeMappedGatewaySessionId ?? taskId;
   }, [activeMappedGatewaySessionId, restSessionId, resumeSession, taskId]);
 
+  const storedMessages = useMemo(
+    () => messagesResponseToHermesUIMessages(messagesData),
+    [messagesData],
+  );
+
+  useEffect(() => {
+    const sessionId = runtimeSessionId ?? taskId;
+    if (!sessionId || !runtimeIsBusy || storedMessages.length === 0) return;
+    recoverCompletedTurnFromStoredMessages({
+      sessionId,
+      storedMessages,
+    });
+  }, [
+    recoverCompletedTurnFromStoredMessages,
+    runtimeIsBusy,
+    runtimeSessionId,
+    storedMessages,
+    taskId,
+  ]);
+
   const chatMessages = useMemo(() => {
-    const stored = messagesResponseToHermesUIMessages(messagesData);
     const canonical = mergeHermesUIMessages(
-      stored,
+      storedMessages,
       isLiveSession ? runtime.messages : [],
     );
     return hermesUIMessagesToChatMessages(canonical);
   }, [
     isLiveSession,
-    messagesData,
     runtime.messages,
+    storedMessages,
   ]);
 
   const onSend = useCallback(async (
