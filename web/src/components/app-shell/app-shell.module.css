@@ -5,12 +5,21 @@
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-rows: var(--h-topbar-h) 1fr var(--h-statusbar-h);
+  grid-template-rows: calc(var(--h-topbar-h) + var(--h-window-control-safe-top, 0px)) 1fr var(--h-statusbar-h);
   grid-template-columns: var(--h-sidebar-w) 1fr;
   overflow: hidden;
   background: var(--h-bg-app);
   color: var(--h-text);
   font-family: var(--h-font-ui);
+}
+
+:global(html[data-hermes-window-type="tauri"][data-hermes-host-os="macos"]) .shell {
+  /*
+   * Tauri's macOS titleBarStyle=Overlay draws native traffic lights over the
+   * top of the WebView. Keep a dedicated native-control band above Hermes UI
+   * instead of shifting the brand/nav horizontally.
+   */
+  --h-window-control-safe-top: 28px;
 }
 
 .topbarSlot {

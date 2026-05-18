@@ -8,6 +8,7 @@ import type {
 } from "@hermes/protocol";
 
 export type RuntimePlatform = "web" | "electron" | "tauri";
+export type HostOS = "macos" | "windows" | "linux" | "unknown";
 
 export interface ElectronApiRequestInput {
   path: string;
@@ -64,6 +65,23 @@ declare global {
 
 function trimTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
+}
+
+export function detectHostOS(): HostOS {
+  if (typeof navigator === "undefined") return "unknown";
+  const platform = navigator.platform || "";
+  const userAgent = navigator.userAgent || "";
+  const probe = `${platform} ${userAgent}`.toLowerCase();
+  if (probe.includes("mac")) return "macos";
+  if (probe.includes("win")) return "windows";
+  if (probe.includes("linux") || probe.includes("x11")) return "linux";
+  return "unknown";
+}
+
+export function applyHostOSToDOM(os: HostOS = detectHostOS()): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.hermesHostOs = os;
+  if (document.body) document.body.dataset.hermesHostOs = os;
 }
 
 export const runtime = {
