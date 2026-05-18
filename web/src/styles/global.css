@@ -15,6 +15,14 @@ body,
   overflow: hidden;
 }
 
+html,
+body,
+#root,
+#root * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 html {
   text-size-adjust: 100%;
 }
@@ -49,12 +57,7 @@ select {
   font-family: inherit;
 }
 
-:where(button, [role="button"], [data-ui-no-select="true"]) {
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-:where(input, textarea, select, [contenteditable="true"]) {
+#root :where(input, textarea, select, [contenteditable="true"], [contenteditable="true"] *) {
   -webkit-user-select: text;
   user-select: text;
 }
