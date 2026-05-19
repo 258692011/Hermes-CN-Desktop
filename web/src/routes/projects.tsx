@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import type { SessionSummary } from "@hermes/protocol";
 import { useSessions } from "@/hooks/use-sessions";
-import { formatCostCny, formatTokens, relativeTime } from "@/lib/format";
+import { formatTokens, relativeTime } from "@/lib/format";
 import {
   normalizeWorkspacePath,
   readSessionWorkspaceMap,
@@ -29,7 +29,6 @@ interface ProjectAggregate {
   project: WorkspaceProject;
   sessions: SessionSummary[];
   weekSessions: number;
-  totalCostUsd: number;
   totalTokens: number;
   lastActivity: number; // unix sec
   topModel: string | null;
@@ -142,21 +141,18 @@ export function ProjectsRoute() {
     return projects.map((project) => {
       const projectSessions = byPath.get(project.path) ?? [];
       let weekSessions = 0;
-      let totalCostUsd = 0;
       let totalTokens = 0;
       let lastActivity = project.updatedAt / 1000;
       for (const session of projectSessions) {
         const activity = lastActivitySec(session);
         if (activity > lastActivity) lastActivity = activity;
         if (session.started_at >= nowSec - WEEK_SECONDS) weekSessions += 1;
-        totalCostUsd += session.estimated_cost_usd ?? 0;
         totalTokens += (session.input_tokens ?? 0) + (session.output_tokens ?? 0);
       }
       return {
         project,
         sessions: projectSessions,
         weekSessions,
-        totalCostUsd,
         totalTokens,
         lastActivity,
         topModel: pickTopModel(projectSessions),
@@ -277,7 +273,7 @@ export function ProjectsRoute() {
                 <col className={s.sessionsCol} />
                 <col className={s.activityCol} />
                 <col className={s.modelCol} />
-                <col className={s.costCol} />
+                <col className={s.tokensCol} />
                 <col className={s.actionsCol} />
               </colgroup>
               <thead>
@@ -287,7 +283,7 @@ export function ProjectsRoute() {
                   <th>会话</th>
                   <th>最近活动</th>
                   <th>常用模型</th>
-                  <th>累计花费</th>
+                  <th>累计 Tokens</th>
                   <th aria-label="操作" />
                 </tr>
               </thead>
@@ -313,7 +309,7 @@ export function ProjectsRoute() {
                       </td>
                       <td className={s.mono}>{item.topModel ?? "—"}</td>
                       <td className={`${s.mono} ${s.metricCell}`}>
-                        {formatCostCny(item.totalCostUsd)}
+                        {formatTokens(item.totalTokens)}
                       </td>
                       <td className={s.menuCell} onClick={(event) => event.stopPropagation()}>
                         <Popover.Root

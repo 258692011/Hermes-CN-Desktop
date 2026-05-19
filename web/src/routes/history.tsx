@@ -23,7 +23,6 @@ import { sessionDisplayTitle } from "@/lib/session-title";
 import {
   dayKey,
   dayLabel,
-  formatCostCny,
   formatTokens,
   isToday,
   relativeTime,
@@ -525,13 +524,13 @@ export function HistoryRoute() {
     [filtered],
   );
 
-  const todayCostUsd = useMemo(() => {
-    let usd = 0;
+  const todayTokens = useMemo(() => {
+    let tokens = 0;
     for (const session of sessions) {
       if (!isToday(lastActivitySec(session))) continue;
-      usd += session.estimated_cost_usd ?? 0;
+      tokens += (session.input_tokens ?? 0) + (session.output_tokens ?? 0);
     }
-    return usd;
+    return tokens;
   }, [sessions]);
 
   return (
@@ -542,7 +541,7 @@ export function HistoryRoute() {
         right={
           <>
             <span className={s.headerStat}>
-              今日 <span className={s.headerStatValue}>{formatCostCny(todayCostUsd)}</span>
+              今日 <span className={s.headerStatValue}>{formatTokens(todayTokens)} tokens</span>
             </span>
             <TopBarActionButton onClick={() => navigate("/")}>
               <Plus size={13} />
@@ -648,10 +647,6 @@ export function HistoryRoute() {
           </div>
         ) : (
           dayGroups.map((group, groupIdx) => {
-            const dayCostUsd = group.sessions.reduce(
-              (sum, session) => sum + (session.estimated_cost_usd ?? 0),
-              0,
-            );
             const dayTokens = group.sessions.reduce(
               (sum, session) =>
                 sum + (session.input_tokens ?? 0) + (session.output_tokens ?? 0),
@@ -663,7 +658,7 @@ export function HistoryRoute() {
                   <span className={s.dayLabel}>{group.label}</span>
                   <span className={s.dayCount}>{group.sessions.length} 个会话</span>
                   <span className={s.dayTotals}>
-                    {formatCostCny(dayCostUsd)} · {formatTokens(dayTokens)} tokens
+                    {formatTokens(dayTokens)} tokens
                   </span>
                 </div>
 
@@ -675,7 +670,6 @@ export function HistoryRoute() {
                     <span>模型</span>
                     <span>工作区</span>
                     <span>更新</span>
-                    <span className={s.alignRight}>花费</span>
                     <span />
                   </div>
                 ) : null}
@@ -717,9 +711,6 @@ export function HistoryRoute() {
                         {workspaceName || "—"}
                       </span>
                       <span className={s.cellTimestamp}>{updatedDisplay}</span>
-                      <span className={`${s.cellMono} ${s.alignRight}`}>
-                        {formatCostCny(session.estimated_cost_usd)}
-                      </span>
                       <Popover.Root
                         open={openMenuId === session.id}
                         onOpenChange={(open) => setOpenMenuId(open ? session.id : null)}

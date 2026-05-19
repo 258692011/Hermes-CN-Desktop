@@ -210,11 +210,7 @@ export function WorkbenchSidebar() {
             today.map((sess) => {
               const state: "ok" | "err" =
                 sess.end_reason === "error" || sess.end_reason === "interrupted" ? "err" : "ok";
-              const cost = sess.actual_cost_usd ?? sess.estimated_cost_usd;
-              const costStr = cost != null ? `$${cost.toFixed(2)}` : null;
-              const meta = [relTime(sess.ended_at ?? sess.started_at, now), costStr]
-                .filter(Boolean)
-                .join(" · ");
+              const meta = relTime(sess.ended_at ?? sess.started_at, now);
               return (
                 <SessionRow
                   key={sess.id}

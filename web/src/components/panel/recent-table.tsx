@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { sessionDisplayTitle } from "@/lib/session-title";
-import { formatCostCny, relativeTime } from "@/lib/format";
+import { formatTokens, relativeTime } from "@/lib/format";
 import { Dot } from "@/components/ui/pill";
 import type { SessionSummary } from "@hermes/protocol";
 import s from "./recent-table.module.css";
@@ -74,7 +74,7 @@ export function RecentTable({ sessions, onOpen }: RecentTableProps) {
               <th style={{ width: 130 }}>模型</th>
               <th style={{ width: 90 }}>来源</th>
               <th style={{ width: 110 }}>完成</th>
-              <th style={{ width: 90 }} className={s.numeric}>花费</th>
+              <th style={{ width: 90 }} className={s.numeric}>Tokens</th>
             </tr>
           </thead>
           <tbody>
@@ -100,7 +100,9 @@ export function RecentTable({ sessions, onOpen }: RecentTableProps) {
                       {formatEndedAt(sess.ended_at)}
                     </span>
                   </td>
-                  <td className={s.numeric}>{formatCostCny(sess.estimated_cost_usd ?? 0)}</td>
+                  <td className={s.numeric}>
+                    {formatTokens((sess.input_tokens ?? 0) + (sess.output_tokens ?? 0))}
+                  </td>
                 </tr>
               );
             })}

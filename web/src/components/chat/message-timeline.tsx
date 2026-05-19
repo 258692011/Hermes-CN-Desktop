@@ -11,7 +11,6 @@ import { summarizeToolActivity } from "./tool-activity";
 import { groupConsecutiveTools, groupElapsedMs } from "./group-tools";
 import { truncateMiddle } from "@/lib/truncate-middle";
 import {
-  formatCostUsd,
   formatDurationMs,
   formatElapsedTimer,
   formatTokPerSec,
@@ -507,12 +506,6 @@ function MessageStatsFooter({ stats }: { stats: AssistantMessageStats }) {
               <>
                 <dt>API</dt>
                 <dd>{stats.apiCalls} 次调用</dd>
-              </>
-            ) : null}
-            {stats.costUsd !== undefined ? (
-              <>
-                <dt>成本</dt>
-                <dd>{formatCostUsd(stats.costUsd)}</dd>
               </>
             ) : null}
             {stats.finishReason ? (

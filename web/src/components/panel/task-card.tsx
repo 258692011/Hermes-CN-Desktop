@@ -1,7 +1,7 @@
 import { useAtomValue } from "jotai";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { sessionDisplayTitle } from "@/lib/session-title";
-import { formatCostCny, relativeTime } from "@/lib/format";
+import { formatTokens, relativeTime } from "@/lib/format";
 import { Dot, Pill } from "@/components/ui/pill";
 import type { SessionSummary } from "@hermes/protocol";
 import s from "./task-card.module.css";
@@ -21,7 +21,7 @@ export function TaskCard({ session, onClick }: TaskCardProps) {
   const pendingCount = runtime?.pendingApprovals.length ?? 0;
 
   const toolCount = session.tool_call_count ?? 0;
-  const cost = session.estimated_cost_usd ?? session.actual_cost_usd ?? 0;
+  const tokens = (session.input_tokens ?? 0) + (session.output_tokens ?? 0);
   const desc = session.preview?.trim() || "尚未输出内容…";
 
   return (
@@ -52,10 +52,10 @@ export function TaskCard({ session, onClick }: TaskCardProps) {
             </>
           )}
         </span>
-        {cost > 0 && (
+        {tokens > 0 && (
           <>
             <span className={s.footSep}>|</span>
-            <span>已花费 {formatCostCny(cost)}</span>
+            <span>{formatTokens(tokens)} tokens</span>
           </>
         )}
         <span className={s.footEnter}>→ 进入工作台</span>

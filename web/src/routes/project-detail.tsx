@@ -12,7 +12,7 @@ import {
 import type { SessionSummary } from "@hermes/protocol";
 import { useSessions } from "@/hooks/use-sessions";
 import { sessionDisplayTitle } from "@/lib/session-title";
-import { formatCostCny, formatTokens, relativeTime } from "@/lib/format";
+import { formatTokens, relativeTime } from "@/lib/format";
 import { getSourceMeta } from "@/lib/source-meta";
 import {
   normalizeWorkspacePath,
@@ -126,22 +126,20 @@ export function ProjectDetailRoute() {
   const stats = useMemo(() => {
     const nowSec = Date.now() / 1000;
     let weekSessions = 0;
-    let weekCostUsd = 0;
-    let totalCostUsd = 0;
+    let weekTokens = 0;
     let totalTokens = 0;
     for (const session of projectSessions) {
-      totalCostUsd += session.estimated_cost_usd ?? 0;
-      totalTokens += (session.input_tokens ?? 0) + (session.output_tokens ?? 0);
+      const sessionTokens = (session.input_tokens ?? 0) + (session.output_tokens ?? 0);
+      totalTokens += sessionTokens;
       if (session.started_at >= nowSec - WEEK_SECONDS) {
         weekSessions += 1;
-        weekCostUsd += session.estimated_cost_usd ?? 0;
+        weekTokens += sessionTokens;
       }
     }
     return {
       totalSessions: projectSessions.length,
       weekSessions,
-      weekCostUsd,
-      totalCostUsd,
+      weekTokens,
       totalTokens,
     };
   }, [projectSessions]);
@@ -277,9 +275,9 @@ export function ProjectDetailRoute() {
             <div className={s.statSub}>本周 {stats.weekSessions}</div>
           </div>
           <div className={s.statCard}>
-            <div className={s.statLabel}>本周花费</div>
-            <div className={s.statValue}>{formatCostCny(stats.weekCostUsd)}</div>
-            <div className={s.statSub}>累计 {formatCostCny(stats.totalCostUsd)}</div>
+            <div className={s.statLabel}>本周 Tokens</div>
+            <div className={s.statValue}>{formatTokens(stats.weekTokens)}</div>
+            <div className={s.statSub}>累计 {formatTokens(stats.totalTokens)}</div>
           </div>
           <div className={s.statCard}>
             <div className={s.statLabel}>累计 Tokens</div>
@@ -326,7 +324,7 @@ export function ProjectDetailRoute() {
                     <th style={{ width: 80 }}>来源</th>
                     <th style={{ width: 140 }}>模型</th>
                     <th style={{ width: 110 }}>更新</th>
-                    <th style={{ width: 80 }} className={s.numeric}>花费</th>
+                    <th style={{ width: 90 }} className={s.numeric}>Tokens</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -349,7 +347,7 @@ export function ProjectDetailRoute() {
                           {relativeTime(lastActivitySec(session))}
                         </td>
                         <td className={`${s.mono} ${s.numeric}`}>
-                          {formatCostCny(session.estimated_cost_usd)}
+                          {formatTokens((session.input_tokens ?? 0) + (session.output_tokens ?? 0))}
                         </td>
                       </tr>
                     );

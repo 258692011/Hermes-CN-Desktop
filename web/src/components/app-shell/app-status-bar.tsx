@@ -6,7 +6,7 @@ import { useSessions } from "@/hooks/use-sessions";
 import { useAnalytics } from "@/hooks/use-analytics";
 import { chatRuntimeBySessionAtom } from "@/stores/chat";
 import { isSessionRunning } from "@/lib/session-activity";
-import { formatCostUsd } from "@/lib/format";
+import { formatTokens } from "@/lib/format";
 import s from "./app-status-bar.module.css";
 
 function formatModelShort(model: string | null | undefined): string {
@@ -69,7 +69,8 @@ export function AppStatusBar() {
     ).length;
   }, [sessions]);
 
-  const todayCost = analytics?.daily?.[0]?.actual_cost ?? analytics?.daily?.[0]?.estimated_cost ?? 0;
+  const todayTokens =
+    (analytics?.daily?.[0]?.input_tokens ?? 0) + (analytics?.daily?.[0]?.output_tokens ?? 0);
 
   return (
     <footer className={s.statusbar} role="status" aria-label="运行状态">
@@ -106,8 +107,8 @@ export function AppStatusBar() {
         </span>
         <span className={s.sep} />
         <span className={s.stat}>
-          <span className={s.lbl}>今日消费</span>
-          <span className={s.val}>{formatCostUsd(todayCost)}</span>
+          <span className={s.lbl}>今日 Tokens</span>
+          <span className={s.val}>{formatTokens(todayTokens)}</span>
         </span>
       </div>
     </footer>
