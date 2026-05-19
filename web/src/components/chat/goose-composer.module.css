@@ -926,7 +926,7 @@
 }
 
 .iconButton:disabled {
-  cursor: default;
+  cursor: not-allowed;
   opacity: 0.55;
 }
 
@@ -946,6 +946,12 @@
 .toolButton[data-active="true"] {
   background: var(--h-bg-chip);
   color: var(--h-text);
+}
+
+.toolButton:disabled {
+  cursor: not-allowed;
+  color: var(--h-text-3);
+  opacity: 0.55;
 }
 
 .toolButton span,

@@ -126,10 +126,11 @@ export function GooseComposer({
   const hasProcessingAttachment = attachments.some(isAttachmentBusy);
   const contextRisk = contextUsageRisk(contextUsage);
   const contextWarning = contextRiskText(contextRisk, loading);
+  const controlsDisabled = disabled || loading;
+  const modelPickerDisabled = controlsDisabled || Boolean(modelPicker?.disabled);
   const canSend =
     (value.trim().length > 0 || attachments.length > 0) &&
-    !disabled &&
-    !loading &&
+    !controlsDisabled &&
     !hasProcessingAttachment;
 
   // Make `initial` reactive so external prefill (e.g. quick-start recipes) takes
@@ -182,6 +183,14 @@ export function GooseComposer({
       attachmentsRef.current.forEach(revokeAttachmentPreview);
     };
   }, []);
+
+  useEffect(() => {
+    if (!controlsDisabled) return;
+    setWorkspacePickerOpen(false);
+    setModelOpen(false);
+    setDragActive(false);
+    dragDepthRef.current = 0;
+  }, [controlsDisabled]);
 
   // Picker now groups candidates internally (recent / configured /
   // recommended / more) from the catalog + usage log. Composer just hands it
@@ -236,7 +245,7 @@ export function GooseComposer({
   };
 
   const pickFiles = async () => {
-    if (disabled || loading) return;
+    if (controlsDisabled) return;
     setSubmitError("");
     try {
       if (window.hermesDesktop?.pickFiles) {
@@ -251,7 +260,7 @@ export function GooseComposer({
   };
 
   const handleFileInputChange = (event: ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files) {
+    if (!controlsDisabled && event.target.files) {
       addBrowserFiles(event.target.files);
     }
     event.target.value = "";
@@ -266,7 +275,7 @@ export function GooseComposer({
   };
 
   const pickWorkspace = async () => {
-    if (disabled || loading) return;
+    if (controlsDisabled) return;
     setSubmitError("");
     try {
       if (window.hermesDesktop?.pickDirectory) {
@@ -357,7 +366,7 @@ export function GooseComposer({
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    if (disabled || loading) return;
+    if (controlsDisabled) return;
     const files = Array.from(event.clipboardData.files);
     if (!files.length) return;
     event.preventDefault();
@@ -370,7 +379,7 @@ export function GooseComposer({
   };
 
   const handleDragEnter = (event: DragEvent<HTMLDivElement>) => {
-    if (disabled || loading || !hasDroppableData(event)) return;
+    if (controlsDisabled || !hasDroppableData(event)) return;
     event.preventDefault();
     dragDepthRef.current += 1;
     setDragActive(true);
@@ -386,7 +395,7 @@ export function GooseComposer({
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (disabled || loading || !hasDroppableData(event)) return;
+    if (controlsDisabled || !hasDroppableData(event)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
   };
@@ -395,7 +404,7 @@ export function GooseComposer({
     event.preventDefault();
     dragDepthRef.current = 0;
     setDragActive(false);
-    if (disabled || loading) return;
+    if (controlsDisabled) return;
 
     const paths: string[] = [];
     const text = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
@@ -441,14 +450,14 @@ export function GooseComposer({
   }, [modelOptions, modelPicker]);
 
   const toggleModelPicker = () => {
-    if (!modelPicker || disabled || loading) return;
+    if (!modelPicker || modelPickerDisabled) return;
     const next = !modelOpen;
     setModelOpen(next);
     if (next) void loadModelOptions();
   };
 
   const selectModel = async (selection: ComposerModelSelection) => {
-    if (!modelPicker?.onSelect) return;
+    if (!modelPicker?.onSelect || modelPickerDisabled) return;
     selectedModelRef.current = selection;
     setSwitchingModel(true);
     setModelError("");
@@ -464,7 +473,7 @@ export function GooseComposer({
   };
 
   useEffect(() => {
-    if (!modelPicker?.loadOptions || modelPicker.disabled || disabled) return;
+    if (!modelPicker?.loadOptions || modelPickerDisabled) return;
     if (modelOptions || modelLoadPromiseRef.current) return;
 
     let cancelled = false;
@@ -485,7 +494,7 @@ export function GooseComposer({
       if (idleId !== undefined) window.cancelIdleCallback(idleId);
       if (timeoutId !== undefined) clearTimeout(timeoutId);
     };
-  }, [disabled, loadModelOptions, modelOptions, modelPicker?.disabled, modelPicker?.loadOptions]);
+  }, [loadModelOptions, modelOptions, modelPicker?.loadOptions, modelPickerDisabled]);
 
   // When the parent's useModelOptions query resolves *after* this composer
   // mounts (cache miss on first ever load), backfill our local state so the
@@ -578,7 +587,7 @@ export function GooseComposer({
               className={s.iconButton}
               type="button"
               onClick={() => void pickFiles()}
-              disabled={disabled || loading}
+              disabled={controlsDisabled}
               title="添加附件"
               aria-label="添加附件"
             >
@@ -588,7 +597,7 @@ export function GooseComposer({
               className={s.toolButton}
               type="button"
               onClick={() => void pickWorkspace()}
-              disabled={disabled || loading}
+              disabled={controlsDisabled}
               data-active={Boolean(workspacePath)}
               title={workspacePath || "选择工作区"}
             >
@@ -601,7 +610,7 @@ export function GooseComposer({
                 className={s.toolButton}
                 type="button"
                 onClick={toggleModelPicker}
-                disabled={disabled || loading || modelPicker.disabled}
+                disabled={modelPickerDisabled}
                 data-active={modelOpen || Boolean(modelPicker.selected)}
                 title={modelText}
                 aria-haspopup="dialog"
