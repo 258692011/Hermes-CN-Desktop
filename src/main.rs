@@ -131,7 +131,7 @@ fn main() {
             let port: u16 = std::env::var("HERMES_DESKTOP_API_PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())
-                .unwrap_or(9119);
+                .unwrap_or(dashboard::DEFAULT_DESKTOP_DASHBOARD_PORT);
 
             // 4. Bootstrap dashboard outside setup's critical path so the
             // window can appear immediately. Set HERMES_DESKTOP_SYNC_BOOTSTRAP

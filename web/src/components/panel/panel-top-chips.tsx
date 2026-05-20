@@ -8,6 +8,17 @@ import { useLastUsedModel } from "@/lib/last-used-model";
 import { Dot } from "@/components/ui/pill";
 import s from "./panel-top-chips.module.css";
 
+const DEFAULT_DESKTOP_DASHBOARD_PORT = "9120";
+
+function portFromHealthUrl(url: string | null | undefined): string {
+  if (!url) return DEFAULT_DESKTOP_DASHBOARD_PORT;
+  try {
+    return new URL(url).port || DEFAULT_DESKTOP_DASHBOARD_PORT;
+  } catch {
+    return DEFAULT_DESKTOP_DASHBOARD_PORT;
+  }
+}
+
 export function PanelTopChips() {
   const { data: status } = useStatus();
   const { data: modelInfo } = useModelInfo();
@@ -20,6 +31,7 @@ export function PanelTopChips() {
   // daemon 字段，与 v2 transport 无关（见 health-grid.tsx 注释）。
   const gatewayOk = connectionState === "open";
   const gatewayTone = gatewayOk ? "ok" : connectionState === "connecting" ? "warn" : "err";
+  const gatewayPort = portFromHealthUrl(status?.gateway_health_url);
 
   // Match composer's "model that will be used" semantics: prefer user's last-used
   // selection, fall back to dashboard's effective default. Tag the source so the
@@ -43,7 +55,7 @@ export function PanelTopChips() {
     <>
       <span className={s.chip} title={`Gateway ${connectionState}`}>
         <Dot tone={gatewayTone} />
-        Gateway 9119
+        Gateway {gatewayPort}
       </span>
       <span
         className={s.chip}

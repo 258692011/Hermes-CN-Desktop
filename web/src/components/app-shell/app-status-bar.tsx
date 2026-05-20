@@ -9,6 +9,8 @@ import { isSessionRunning } from "@/lib/session-activity";
 import { formatTokens } from "@/lib/format";
 import s from "./app-status-bar.module.css";
 
+const DEFAULT_DESKTOP_DASHBOARD_PORT = "9120";
+
 function formatModelShort(model: string | null | undefined): string {
   if (!model) return "—";
   return model.replace(/^claude-/, "").replace(/-\d{8}$/, "");
@@ -29,11 +31,11 @@ function tilde(path: string | undefined): string {
 }
 
 function portFromHealthUrl(url: string | null | undefined): string {
-  if (!url) return "9119";
+  if (!url) return DEFAULT_DESKTOP_DASHBOARD_PORT;
   try {
-    return new URL(url).port || "9119";
+    return new URL(url).port || DEFAULT_DESKTOP_DASHBOARD_PORT;
   } catch {
-    return "9119";
+    return DEFAULT_DESKTOP_DASHBOARD_PORT;
   }
 }
 

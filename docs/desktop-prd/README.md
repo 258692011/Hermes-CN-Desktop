@@ -2,7 +2,7 @@
 
 > **项目**：Hermes Agent CN 桌面端（Tauri v2 重写版）
 > **仓库**：`hermes-cn-desktop-v2`
-> **后端**：`hermes-agent-cn` Dashboard（端口 9119）
+> **后端**：`hermes-agent-cn` Dashboard（桌面端 managed runtime 默认端口 9120）
 > **作者**：李嘉乐
 > **最后更新**：2026-05-16
 

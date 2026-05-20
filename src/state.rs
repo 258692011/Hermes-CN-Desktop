@@ -13,7 +13,7 @@ use std::sync::Mutex;
 
 /// Handle to a running hermes dashboard subprocess.
 pub struct DashboardHandle {
-    /// Base URL of the dashboard API (e.g. "http://127.0.0.1:9119").
+    /// Base URL of the dashboard API (e.g. "http://127.0.0.1:9120").
     pub api_base_url: String,
     /// Whether we spawned this process (true) or attached to an existing one (false).
     pub owns_process: bool,

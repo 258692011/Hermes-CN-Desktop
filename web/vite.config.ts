@@ -18,7 +18,7 @@ function hermesTokenPlugin(): Plugin {
         // "WebSocket connection failed" until vite is restarted too.
         let token: string | null = null;
         try {
-          const html = await fetch(`${process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.1:9119"}/`).then((r) => r.text());
+          const html = await fetch(`${process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.1:9120"}/`).then((r) => r.text());
           const match = html.match(/__HERMES_SESSION_TOKEN__="([^"]+)"/);
           token = match?.[1] ?? null;
         } catch {
@@ -73,9 +73,8 @@ function hermesSessionLogPlugin(): Plugin {
 
 const SESSION_ARCHIVE_STATE_FILE = "session-ui-state.json";
 // Override with HERMES_DASHBOARD_ORIGIN to point dev server at a different
-// dashboard (e.g. a P-009 SSE-enabled instance on port 9120 for QA without
-// disturbing the user's main dashboard on 9119).
-const API_PROXY_TARGET = process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.1:9119";
+// dashboard without disturbing a user's separately installed dashboard on 9119.
+const API_PROXY_TARGET = process.env.HERMES_DASHBOARD_ORIGIN || "http://127.0.0.1:9120";
 
 function gitShortCommit(): string {
   if (process.env.HERMES_BUILD_COMMIT) return process.env.HERMES_BUILD_COMMIT;

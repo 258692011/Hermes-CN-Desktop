@@ -20,6 +20,7 @@ use crate::state::DashboardHandle;
 const DASHBOARD_READY_TIMEOUT: Duration = Duration::from_secs(25);
 const PROBE_TIMEOUT: Duration = Duration::from_millis(900);
 const SESSION_TOKEN_TIMEOUT: Duration = Duration::from_millis(1200);
+pub const DEFAULT_DESKTOP_DASHBOARD_PORT: u16 = 9120;
 const DASHBOARD_PORT_FALLBACK_LIMIT: u16 = 20;
 static SESSION_TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"__HERMES_SESSION_TOKEN__="([^"]+)""#).expect("valid session token regex")
@@ -519,6 +520,11 @@ mod tests {
     fn fallback_ports_stop_at_u16_max() {
         assert_eq!(fallback_ports(u16::MAX - 2), vec![u16::MAX - 1, u16::MAX]);
         assert!(fallback_ports(u16::MAX).is_empty());
+    }
+
+    #[test]
+    fn desktop_default_port_avoids_global_hermes_dashboard_default() {
+        assert_eq!(DEFAULT_DESKTOP_DASHBOARD_PORT, 9120);
     }
 
     #[test]

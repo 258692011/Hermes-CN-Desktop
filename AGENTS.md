@@ -3,7 +3,7 @@
 ## 项目概述
 
 Hermes Agent CN 桌面端 — 用 Tauri v2 + React 构建的独立桌面应用，替代原 Electron 壳。
-对接后端是 [hermes-agent](https://github.com/Eynzof/hermes-agent-cn) 内置 Dashboard（端口 9119）。
+对接后端是 [hermes-agent](https://github.com/Eynzof/hermes-agent-cn) 内置 Dashboard；桌面端 managed runtime 默认使用端口 9120，避开用户全局 Hermes Agent 常用的 9119。
 
 ## 项目结构
 
@@ -134,7 +134,7 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 
 ## 端口
 
-- **9119**：Hermes Dashboard（UI 对接的后端）
+- **9120**：Hermes Dashboard（桌面端 managed runtime 默认后端；9119 通常留给用户全局 Hermes Agent）
 - **9545**：Vite dev server（`web/vite.config.ts` 写死，strictPort）
 
 ## Rust 测试约定
@@ -189,7 +189,7 @@ C:\Users\Mason\Documents\GithubProjects\hermes\hermes-agent-cn
 ```powershell
 $env:HERMES_HOME='C:\Users\Mason\AppData\Local\hermes'
 $env:HERMES_DASHBOARD_TUI='1'
-& 'C:\Users\Mason\AppData\Local\hermes\hermes-agent\venv\Scripts\hermes.exe' dashboard --host 127.0.0.1 --port 9119 --no-open
+& 'C:\Users\Mason\AppData\Local\hermes\hermes-agent\venv\Scripts\hermes.exe' dashboard --host 127.0.0.1 --port 9120 --no-open
 ```
 
 然后启动 desktop-v2：
@@ -197,14 +197,14 @@ $env:HERMES_DASHBOARD_TUI='1'
 ```powershell
 $env:HERMES_DESKTOP_AGENT_COMMAND='C:\Users\Mason\AppData\Local\hermes\hermes-agent\venv\Scripts\hermes.exe'
 $env:HERMES_DESKTOP_HERMES_HOME='C:\Users\Mason\AppData\Local\hermes'
-$env:HERMES_DASHBOARD_ORIGIN='http://127.0.0.1:9119'
+$env:HERMES_DASHBOARD_ORIGIN='http://127.0.0.1:9120'
 pnpm tauri:dev
 ```
 
 启动后验证：
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:9119/api/status
+Invoke-RestMethod http://127.0.0.1:9120/api/status
 ```
 
 关键字段应类似：

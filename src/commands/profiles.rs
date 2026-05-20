@@ -91,7 +91,7 @@ fn host_and_port() -> (String, u16) {
     let port = std::env::var("HERMES_DESKTOP_API_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
-        .unwrap_or(9119u16);
+        .unwrap_or(dashboard::DEFAULT_DESKTOP_DASHBOARD_PORT);
     (host, port)
 }
 

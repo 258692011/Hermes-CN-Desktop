@@ -333,7 +333,7 @@ keypair 同时签的过渡期（这个我们的代码现在不支持，要的话
 | 桌面端窗口卡在 "正在下载 runtime" 不动 | manifest URL 404 / 网络不通 | F12 → Network 看 GET stable-win32-x64.json |
 | 显示 "runtime 安装失败：SHA-256 mismatch" | artifact 被劫持 / CDN 缓存了旧版 | 强制刷新 GitHub Release 缓存，或重发布 |
 | 显示 "runtime 安装失败：Signature verification failed" | 公私钥不匹配 / fork 重签了 manifest | 对照桌面端二进制里的公钥 vs `RUNTIME_SIGN_PRIVATE_KEY_PEM` |
-| dashboard 起来但 UI 报 "SSE closed during connect" | dashboard 缺 P-009 路由 | `curl http://localhost:9119/openapi.json | jq '.paths | keys' | grep v2`，应该看到 events + rpc |
+| dashboard 起来但 UI 报 "SSE closed during connect" | dashboard 缺 P-009 路由 | `curl http://localhost:9120/openapi.json | jq '.paths | keys' | grep v2`，应该看到 events + rpc |
 | 升级后启动闪退 | 新 runtime 跑不起来 | 删 `%APPDATA%\cn.hermes.agent.desktop\runtime\current.json` 让桌面端重新走 first-run |
 | 升级想回滚 | runtime 出 bug | UI 调 `runtime_rollback` 或手动改 current.json 指 versions/旧版本/ |
 

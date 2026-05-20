@@ -9,6 +9,7 @@ import { Dot } from "@/components/ui/pill";
 import s from "./health-grid.module.css";
 
 const STORAGE_KEY = "hermes:panel:health-open";
+const DEFAULT_DESKTOP_DASHBOARD_ORIGIN = "127.0.0.1:9120";
 
 type Tone = "ok" | "warn" | "err";
 
@@ -41,6 +42,15 @@ function writeOpen(open: boolean) {
   try {
     window.localStorage.setItem(STORAGE_KEY, open ? "1" : "0");
   } catch {}
+}
+
+function originFromHealthUrl(url: string | null | undefined): string {
+  if (!url) return DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+  try {
+    return new URL(url).host || DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+  } catch {
+    return DEFAULT_DESKTOP_DASHBOARD_ORIGIN;
+  }
 }
 
 function Cell({ cell }: { cell: CellData }) {
@@ -94,6 +104,7 @@ export function HealthGrid() {
     const anyTokenSet = setTokens.length > 0;
 
     const hermesHome = status?.hermes_home;
+    const dashboardOrigin = originFromHealthUrl(status?.gateway_health_url);
 
     const modelName = lastUsedModel?.model || modelInfo?.model || "—";
     const ctxLabel = formatContextLength(
@@ -128,7 +139,7 @@ export function HealthGrid() {
       {
         label: "Gateway",
         tone: dashboardReachable ? "ok" : "err",
-        value: "127.0.0.1:9119",
+        value: dashboardOrigin,
         sub: dashboardReachable
           ? daemonRunning
             ? "运行中"
