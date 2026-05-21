@@ -130,7 +130,6 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - Conventional commit：`feat` / `fix` / `style` / `docs` / `refactor` / `chore`
 - 标题用英文短句、命令式（"add ...", "fix ...", "rework ..."）
 - 描述可中英混用，写"为什么"而不是"做了什么"
-- Co-author 行加 Claude 标识
 
 ## 端口
 
@@ -145,5 +144,5 @@ pnpm tauri:build:debug     # Debug：带调试信息的 .app / .dmg
 - **文件系统测试**：用 `tempfile::TempDir`，禁止写 `/tmp`、cwd 或固定路径
 - **HTTP 测试**：用 `wiremock::MockServer`，禁止打真实网络
 - **断言**：优先 `pretty_assertions::assert_eq` 拿更好的 diff
-- **CI**：`.github/workflows/rust-test.yml` 在 PR / push 到 main / dev 时跑 `cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`
+- **CI**：`.github/workflows/rust-test.yml` 在 PR / push 到 main 时跑 `cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`
 - **本地**：改完后跑 `cargo test --all-features`；运行 dashboard 相关测试不需要起 hermes 后端，全部走 mock

@@ -460,4 +460,4 @@ Hermes Dashboard 给桌面端提供**两条并行通道**，职责互补：
 
 | 日期 | 版本 | 改动 | 作者 |
 |------|------|------|------|
-| 2026-05-16 | v0.1 | 初稿；基于 `hermes-agent-cn/hermes_cli/web_server.py` + `tui_gateway/server.py` + `web/src/hooks/*` 扫描 | 李嘉乐 + Claude |
+| 2026-05-16 | v0.1 | 初稿；基于 `hermes-agent-cn/hermes_cli/web_server.py` + `tui_gateway/server.py` + `web/src/hooks/*` 扫描 | Maintainers |

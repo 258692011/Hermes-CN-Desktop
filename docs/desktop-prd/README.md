@@ -3,12 +3,11 @@
 > **项目**：Hermes Agent CN 桌面端（Tauri v2 重写版）
 > **仓库**：`hermes-cn-desktop-v2`
 > **后端**：`hermes-agent-cn` Dashboard（桌面端 managed runtime 默认端口 9120）
-> **作者**：李嘉乐
 > **最后更新**：2026-05-16
 
 桌面端从 Electron（v1）切到 Tauri（v2）的产品文档集合。本文档（README）作为索引。
 
-> **本地 vs 飞书 Wiki**：本目录是 git 仓库 source of truth；飞书「我的文档库」下「Hermes Agent 中文社区桌面版」wiki 节点是只读分发副本，便于跨设备阅读和分享。每次本地改完手动用 `lark-cli docs +update` 同步。
+> 本目录记录桌面端产品设计与实现约束，作为仓库内的产品规格参考。
 
 ---
 

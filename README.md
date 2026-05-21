@@ -1,23 +1,26 @@
 # Hermes Agent CN Desktop
 
-Hermes Agent 中文社区桌面客户端 — 基于 [Tauri v2](https://v2.tauri.app/) + React 构建。
+Hermes Agent 中文社区桌面客户端，基于 [Tauri v2](https://v2.tauri.app/) + React 构建，用更轻量的原生桌面壳承载 [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) Dashboard。
 
-对接 [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) 后端 Dashboard，提供原生桌面体验：原生窗口、文件对话框、系统托盘、自动更新。
+> 当前版本是 `v0.1.0-alpha.1`。项目仍处于早期 alpha 阶段，API、打包流程和运行时分发策略可能继续调整。
 
 ## 特性
 
-- **轻量打包** — Tauri 使用系统 WebView（macOS WebKit / Windows WebView2），安装包 ~15MB（Electron 版 ~150MB）
-- **完整功能** — 多轮对话、流式输出、文件附件、MCP 工具、多 Profile 切换、Runtime 自动更新
-- **跨平台** — macOS（DMG）、Windows（NSIS 安装器）
+- **轻量桌面体验**：Tauri 使用系统 WebView，显著降低安装包体积。
+- **托管运行时**：桌面端默认使用 managed runtime，并将 Dashboard 默认端口设为 `9120`，避免与用户全局 Hermes Agent 常用端口冲突。
+- **完整 Agent 工作流**：支持多轮对话、流式输出、文件附件、MCP 工具、多 Profile、Memory、Skills 和运行时诊断。
+- **生产级代理层**：生产模式下通过 Rust IPC 代理 REST 和 SSE，统一处理鉴权、CORS、上传和本地资源边界。
+- **跨平台目标**：当前重点支持 macOS 和 Windows，发布包由 GitHub Actions 构建。
 
 ## 前置条件
 
-- [Rust](https://rustup.rs/) 1.75+
+- [Rust](https://rustup.rs/) stable
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 9+
-- [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn)（后端）
+- [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) 后端或已安装的 Hermes CLI
 
 macOS 额外需要 Xcode Command Line Tools：
+
 ```bash
 xcode-select --install
 ```
@@ -28,38 +31,45 @@ xcode-select --install
 # 1. 安装依赖
 pnpm install
 
-# 2. 启动后端（另开终端）
-hermes dashboard --no-open
+# 2. 启动后端，另开一个终端执行
+hermes dashboard --host 127.0.0.1 --port 9120 --no-open
 
-# 3. 开发模式（Vite 热更新 + Tauri 原生窗口）
-pnpm web:dev          # 终端 A：启动 Vite (localhost:9545)
-cargo run             # 终端 B：启动 Tauri 窗口
+# 3. 启动桌面端开发模式
+pnpm web:dev
+cargo run
 ```
 
-打开 Tauri 窗口后即可使用。代码修改后 Vite 自动热更新前端，Rust 修改需重新 `cargo run`。
+也可以使用 Tauri dev 脚本自动启动 Vite：
+
+```bash
+pnpm tauri:dev
+```
 
 ## 构建
 
 ```bash
-# Release 构建（产出 .app + .dmg / .exe）
+# Release 构建，产出 .app / .dmg / .exe
 pnpm tauri:build
 
-# Debug 构建（带调试信息）
+# Debug 构建，带调试信息
 pnpm tauri:build:debug
 ```
 
-产物位于 `target/release/bundle/`（或 `target/debug/bundle/`）。
+产物位于 `target/release/bundle/` 或 `target/debug/bundle/`。
 
 ## 项目结构
 
-```
-├── src/                    Rust 后端（Tauri commands + 进程管理）
-├── web/                    React 前端（Vite + TanStack Query + Jotai）
+```text
+├── src/                    Rust 后端：Tauri commands、进程管理、runtime 管理
+├── web/                    React 前端：Vite、TanStack Query、Jotai
 ├── packages/
-│   ├── protocol/           API schemas (Zod) + IPC 类型定义
-│   └── shared-ui/          设计 token + 共享 UI 组件
-├── Cargo.toml              Rust 依赖
-├── tauri.conf.json         Tauri 窗口/打包配置
+│   ├── protocol/           API schemas 与 IPC 类型定义
+│   └── shared-ui/          设计 token 与共享 UI 组件
+├── static/                 打包时注入的 dashboard、runtime、skills 静态资源
+├── scripts/                本地开发、runtime staging、release staging 脚本
+├── .github/workflows/      CI 与桌面端发布流水线
+├── Cargo.toml              Rust crate 配置
+├── tauri.conf.json         Tauri 窗口、权限和打包配置
 └── package.json            pnpm workspace root
 ```
 
@@ -67,26 +77,43 @@ pnpm tauri:build:debug
 
 | 命令 | 说明 |
 |------|------|
-| `pnpm web:dev` | 启动 Vite dev server (localhost:9545) |
+| `pnpm web:dev` | 启动 Vite dev server，默认端口 `9545` |
 | `cargo run` | 编译并启动 Tauri 窗口 |
-| `pnpm typecheck` | TypeScript 类型检查（全部 workspace） |
-| `pnpm test:unit` | 运行 vitest 单元测试 |
+| `pnpm typecheck` | TypeScript 类型检查 |
+| `pnpm test:unit` | 运行 Vitest 单元测试 |
 | `cargo check` | Rust 编译检查 |
+| `cargo test --all-features` | Rust 测试 |
 | `pnpm tauri:build` | 生产构建 |
 
-## 技术栈
+## 质量检查
 
-| 层 | 技术 |
-|----|------|
-| 桌面框架 | Tauri v2 (Rust) |
-| 前端 | React 19 + TypeScript |
-| 构建 | Vite 6 |
-| 服务端状态 | TanStack Query v5 |
-| 本地状态 | Jotai |
-| 样式 | CSS Modules |
-| HTTP 客户端 | reqwest (Rust) |
-| 打包 | Tauri Bundler (DMG / NSIS) |
+提交 PR 前建议至少运行：
+
+```bash
+pnpm typecheck
+pnpm test:unit
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo test --all-features --no-fail-fast
+```
+
+## 发布
+
+正式版本使用 SemVer tag，例如：
+
+```text
+v0.1.0-alpha.1
+v0.1.0-beta.1
+v0.1.0
+v0.1.1
+```
+
+推送 `v*` tag 后会触发 `.github/workflows/release-desktop.yml`，构建并上传桌面端安装包到 GitHub Release。
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request。请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。安全问题请按 [SECURITY.md](./SECURITY.md) 里的方式报告。
 
 ## 许可
 
-私有项目，仅限授权使用。
+本项目使用 [MIT License](./LICENSE)。

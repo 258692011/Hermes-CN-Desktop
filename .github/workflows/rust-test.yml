@@ -1,6 +1,6 @@
 # Rust backend test suite for hermes-cn-desktop-v2.
 #
-# Runs on every PR and push to main/dev. Separate workflow from
+# Runs on every PR and push to main. Separate workflow from
 # release-desktop.yml so a flaky test does not block tagged releases.
 #
 # Linux-only matrix: the test suite is platform-independent except for
@@ -13,11 +13,9 @@ on:
   push:
     branches:
       - main
-      - dev
   pull_request:
     branches:
       - main
-      - dev
 
 jobs:
   test:

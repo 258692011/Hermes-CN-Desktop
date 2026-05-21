@@ -3,7 +3,7 @@ name = "hermes-agent-cn-desktop"
 version = "0.1.0"
 edition = "2021"
 description = "Hermes Agent CN Desktop (Tauri)"
-authors = ["Enzo Li（李嘉乐）"]
+authors = ["Hermes Agent CN Contributors"]
 homepage = "https://hermesagent.org.cn"
 
 [lib]

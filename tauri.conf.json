@@ -37,9 +37,9 @@
       "icons/icon.png",
       "icons/icon.ico"
     ],
-    "publisher": "Enzo Li",
+    "publisher": "Hermes Agent CN Contributors",
     "homepage": "https://hermesagent.org.cn",
-    "copyright": "Copyright © 2026 Enzo Li",
+    "copyright": "Copyright © 2026 Hermes Agent CN Contributors",
     "category": "DeveloperTool",
     "shortDescription": "Hermes Agent Chinese Community Desktop",
     "longDescription": "Desktop app for Hermes Agent Chinese Community Edition.",

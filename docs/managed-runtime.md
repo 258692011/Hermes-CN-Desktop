@@ -290,14 +290,14 @@ desktop CI release-desktop.yml 触发：
 做到：
 
 1. **替换 GitHub Release 的 zip**：需要 push 权限到
-   `Eynzof/hermes-agent-cn` repo（或者干掉 GitHub 自己）。
+   runtime release 仓库的发布权限（或者干掉 GitHub 自己）。
 2. **重签 manifest**：需要 `RUNTIME_SIGN_PRIVATE_KEY_PEM` 私钥。
-   这个 key 只存在 GitHub Actions secret 里，写一次就不能读出。
+   这个 key 只存在 GitHub Actions secret 里，写入后不能从 GitHub 读出。
 3. **桌面端公钥被替换**：桌面端的公钥是**硬编码进 binary**的
    （`src/process/runtime.rs::FALLBACK_PUBLIC_KEY_PEM`）。要替换
    就得让用户安装一个用不同公钥编出的桌面端，回到 #1。
 
-也就是说，攻击者要拿下 `Eynzof` 在 GitHub 的账号 + 私钥 secret，
+也就是说，攻击者需要同时攻破 release 仓库发布权限和签名私钥，
 才能投毒。普通 CDN 投毒（HTTPS 中间人 / 缓存毒化）不工作，因为
 Ed25519 验签会失败、SHA-256 校验会失败、桌面端拒绝安装。
 
