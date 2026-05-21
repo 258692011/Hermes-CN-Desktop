@@ -1,93 +1,125 @@
 # Hermes Agent CN Desktop
 
-Hermes Agent 中文社区桌面客户端，基于 [Tauri v2](https://v2.tauri.app/) + React 构建，用更轻量的原生桌面壳承载 [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) Dashboard。
+[简体中文](./README.zh-CN.md) · English
 
-> 当前版本是 `v0.1.0-alpha.1`。项目仍处于早期 alpha 阶段，API、打包流程和运行时分发策略可能继续调整。
+[![web-test](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/web-test.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/web-test.yml)
+[![rust-test](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/rust-test.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/rust-test.yml)
+[![release-desktop](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/release-desktop.yml/badge.svg)](https://github.com/Eynzof/hermes-cn-desktop-v2/actions/workflows/release-desktop.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-## 特性
+Hermes Agent CN Desktop is a lightweight desktop client for the Hermes Agent Chinese community edition. It is built with [Tauri v2](https://v2.tauri.app/), Rust, React, and TypeScript, and it wraps the [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) Dashboard with a native desktop shell.
 
-- **轻量桌面体验**：Tauri 使用系统 WebView，显著降低安装包体积。
-- **托管运行时**：桌面端默认使用 managed runtime，并将 Dashboard 默认端口设为 `9120`，避免与用户全局 Hermes Agent 常用端口冲突。
-- **完整 Agent 工作流**：支持多轮对话、流式输出、文件附件、MCP 工具、多 Profile、Memory、Skills 和运行时诊断。
-- **生产级代理层**：生产模式下通过 Rust IPC 代理 REST 和 SSE，统一处理鉴权、CORS、上传和本地资源边界。
-- **跨平台目标**：当前重点支持 macOS 和 Windows，发布包由 GitHub Actions 构建。
+> Current release: `v0.1.0-alpha.1`. The project is still in alpha. APIs, packaging, runtime distribution, and UI details may change before the first stable release.
 
-## 前置条件
+## Why this project exists
+
+Hermes Agent already provides a local Dashboard. This repository focuses on the desktop experience around that Dashboard: native windows, local process management, file dialogs, managed runtime installation, runtime diagnostics, and a safer production transport layer for REST and SSE traffic.
+
+This repository is the desktop shell. The agent runtime and Dashboard source live in [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn).
+
+## Highlights
+
+- **Lightweight desktop shell**: Tauri uses the system WebView instead of bundling Chromium.
+- **Managed runtime workflow**: the desktop app can install, update, verify, and roll back the local Hermes runtime.
+- **Agent-first UI**: chat, streaming responses, attachments, MCP tools, skills, memory, profiles, scheduled tasks, and runtime health panels.
+- **Production transport bridge**: Rust commands proxy REST requests, uploads, and SSE streams to avoid WebView CORS limitations and centralize auth handling.
+- **Local-first defaults**: the managed Dashboard uses port `9120` by default, leaving `9119` free for a user-managed global Hermes Agent.
+- **Cross-platform release target**: macOS DMG and Windows NSIS installers are built by GitHub Actions.
+
+## Download
+
+Pre-release builds are published on the [GitHub Releases](https://github.com/Eynzof/hermes-cn-desktop-v2/releases) page.
+
+The current alpha release includes:
+
+- macOS Apple Silicon DMG: `Hermes.Agent.CN.Desktop_0.1.0_aarch64.dmg`
+- Windows x64 installer: `Hermes.Agent.CN.Desktop_0.1.0_x64-setup.exe`
+
+The Windows installer currently stages a bundled `hermes-agent-cn` runtime. The macOS build uses the managed runtime download/update flow on first launch.
+
+## Requirements for development
 
 - [Rust](https://rustup.rs/) stable
 - [Node.js](https://nodejs.org/) 20+
 - [pnpm](https://pnpm.io/) 9+
-- [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) 后端或已安装的 Hermes CLI
+- [hermes-agent-cn](https://github.com/Eynzof/hermes-agent-cn) or an installed Hermes CLI for local Dashboard development
 
-macOS 额外需要 Xcode Command Line Tools：
+macOS also needs Xcode Command Line Tools:
 
 ```bash
 xcode-select --install
 ```
 
-## 快速开始
+## Quick start
+
+Install dependencies:
 
 ```bash
-# 1. 安装依赖
 pnpm install
+```
 
-# 2. 启动后端，另开一个终端执行
+Start the Hermes Dashboard in a separate terminal:
+
+```bash
 hermes dashboard --host 127.0.0.1 --port 9120 --no-open
+```
 
-# 3. 启动桌面端开发模式
+Start the desktop app in development mode:
+
+```bash
 pnpm web:dev
 cargo run
 ```
 
-也可以使用 Tauri dev 脚本自动启动 Vite：
+You can also let the Tauri dev command start the Vite dev server:
 
 ```bash
 pnpm tauri:dev
 ```
 
-## 构建
+## Build
 
 ```bash
-# Release 构建，产出 .app / .dmg / .exe
+# Production build for the current platform
 pnpm tauri:build
 
-# Debug 构建，带调试信息
+# Debug build with debug symbols
 pnpm tauri:build:debug
 ```
 
-产物位于 `target/release/bundle/` 或 `target/debug/bundle/`。
+Build artifacts are written under `target/release/bundle/` or `target/debug/bundle/`.
 
-## 项目结构
+## Repository layout
 
 ```text
-├── src/                    Rust 后端：Tauri commands、进程管理、runtime 管理
-├── web/                    React 前端：Vite、TanStack Query、Jotai
+├── src/                    Rust backend: Tauri commands, process management, runtime management
+├── web/                    React frontend: Vite, TanStack Query, Jotai
 ├── packages/
-│   ├── protocol/           API schemas 与 IPC 类型定义
-│   └── shared-ui/          设计 token 与共享 UI 组件
-├── static/                 打包时注入的 dashboard、runtime、skills 静态资源
-├── scripts/                本地开发、runtime staging、release staging 脚本
-├── .github/workflows/      CI 与桌面端发布流水线
-├── Cargo.toml              Rust crate 配置
-├── tauri.conf.json         Tauri 窗口、权限和打包配置
+│   ├── protocol/           Zod schemas, API contracts, IPC types
+│   └── shared-ui/          Design tokens and shared UI components
+├── static/                 Staged dashboard, runtime, and bundled skills for packaging
+├── scripts/                Local development, runtime staging, and release staging scripts
+├── .github/workflows/      CI and desktop release workflows
+├── Cargo.toml              Rust crate configuration
+├── tauri.conf.json         Tauri window, security, and bundle configuration
 └── package.json            pnpm workspace root
 ```
 
-## 开发命令
+## Common commands
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm web:dev` | 启动 Vite dev server，默认端口 `9545` |
-| `cargo run` | 编译并启动 Tauri 窗口 |
-| `pnpm typecheck` | TypeScript 类型检查 |
-| `pnpm test:unit` | 运行 Vitest 单元测试 |
-| `cargo check` | Rust 编译检查 |
-| `cargo test --all-features` | Rust 测试 |
-| `pnpm tauri:build` | 生产构建 |
+| Command | Description |
+| --- | --- |
+| `pnpm web:dev` | Start the Vite dev server on port `9545` |
+| `cargo run` | Compile and launch the Tauri desktop window |
+| `pnpm typecheck` | Run TypeScript checks across the workspace |
+| `pnpm test:unit` | Run Vitest unit tests |
+| `cargo check` | Run Rust compile checks |
+| `cargo test --all-features` | Run Rust tests |
+| `pnpm tauri:build` | Build production desktop bundles |
 
-## 质量检查
+## Quality gates
 
-提交 PR 前建议至少运行：
+Before opening a pull request, please run the relevant checks:
 
 ```bash
 pnpm typecheck
@@ -97,9 +129,11 @@ cargo clippy --all-targets -- -D warnings
 cargo test --all-features --no-fail-fast
 ```
 
-## 发布
+CI runs separate frontend and Rust workflows on `main` and pull requests targeting `main`.
 
-正式版本使用 SemVer tag，例如：
+## Release process
+
+Releases use SemVer tags:
 
 ```text
 v0.1.0-alpha.1
@@ -108,12 +142,24 @@ v0.1.0
 v0.1.1
 ```
 
-推送 `v*` tag 后会触发 `.github/workflows/release-desktop.yml`，构建并上传桌面端安装包到 GitHub Release。
+Pushing a `v*` tag triggers `.github/workflows/release-desktop.yml`, which builds and uploads desktop installers to GitHub Releases. Alpha, beta, and release-candidate tags are marked as GitHub pre-releases.
 
-## 贡献
+## Roadmap
 
-欢迎提交 Issue 和 Pull Request。请先阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)。安全问题请按 [SECURITY.md](./SECURITY.md) 里的方式报告。
+The short-term roadmap is focused on:
 
-## 许可
+- hardening the managed runtime installation and update path;
+- improving first-run onboarding and provider setup;
+- expanding diagnostics for Dashboard, gateway, MCP, skills, and model configuration;
+- polishing macOS and Windows packaging behavior;
+- documenting the desktop/runtime boundary for contributors.
 
-本项目使用 [MIT License](./LICENSE)。
+## Contributing
+
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before contributing.
+
+For security-sensitive reports, please follow [SECURITY.md](./SECURITY.md) instead of opening a public issue.
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
