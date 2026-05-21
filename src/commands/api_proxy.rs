@@ -26,7 +26,7 @@ const EXTERNAL_TIMEOUT: Duration = Duration::from_secs(15);
 const DASHBOARD_PROXY_TIMEOUT: Duration = Duration::from_secs(30);
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 const MAX_UPLOAD_BYTES: usize = 100 * 1024 * 1024;
-const MAX_UPLOAD_BASE64_LEN: usize = ((MAX_UPLOAD_BYTES + 2) / 3) * 4;
+const MAX_UPLOAD_BASE64_LEN: usize = MAX_UPLOAD_BYTES.div_ceil(3) * 4;
 static DASHBOARD_PROXY_HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
         .timeout(DASHBOARD_PROXY_TIMEOUT)
@@ -470,9 +470,19 @@ pub async fn api_request(
 /// Proxy an HTTP request to an arbitrary external URL (15s timeout).
 #[tauri::command]
 pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult, AppError> {
-    let method = input.method.as_deref().unwrap_or("GET");
     let target_url = validate_external_url(&input.path).await?;
+    external_request_impl(input, target_url).await
+}
 
+/// Core implementation of `external_request` with validation already handled by
+/// the caller. Exposed for integration tests so wiremock can exercise request
+/// forwarding without loosening production URL validation.
+pub async fn external_request_impl(
+    input: ApiRequestInput,
+    target_url: url::Url,
+) -> Result<ApiRequestResult, AppError> {
+    let method = input.method.as_deref().unwrap_or("GET");
+    let display_url = target_url.as_str().to_string();
     let mut req =
         EXTERNAL_HTTP_CLIENT.request(method.parse().unwrap_or(reqwest::Method::GET), target_url);
 
@@ -516,7 +526,7 @@ pub async fn external_request(input: ApiRequestInput) -> Result<ApiRequestResult
                 },
                 headers: HashMap::new(),
                 body: if is_timeout {
-                    format!("Request to {} timed out after 15s", input.path)
+                    format!("Request to {} timed out after 15s", display_url)
                 } else {
                     e.to_string()
                 },

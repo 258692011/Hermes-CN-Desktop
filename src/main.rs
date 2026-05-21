@@ -455,7 +455,9 @@ fn main() {
                             }
 
                             emit_runtime_status(&app_handle, "ready", "");
-                            log::info!("Hermes Agent 中文社区桌面版 ready (after background install)");
+                            log::info!(
+                                "Hermes Agent 中文社区桌面版 ready (after background install)"
+                            );
                         });
 
                         // Seed AppState with what the UI needs while it waits. The

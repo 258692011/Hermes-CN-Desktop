@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use hermes_agent_cn::commands::api_proxy::{
-    api_request_impl, external_request, upload_file_impl, ApiRequestInput, UploadFileInput,
+    api_request_impl, external_request_impl, upload_file_impl, ApiRequestInput, UploadFileInput,
 };
 use hermes_agent_cn::error::AppError;
 use wiremock::matchers::{header, method, path};
@@ -375,12 +375,18 @@ async fn external_request_returns_zero_status_on_unreachable() {
         p
     };
 
-    let result = external_request(ApiRequestInput {
-        path: format!("http://127.0.0.1:{}/anything", port),
-        method: Some("GET".to_string()),
-        headers: None,
-        body: None,
-    })
+    let target_url: url::Url = format!("http://127.0.0.1:{}/anything", port)
+        .parse()
+        .expect("valid mock URL");
+    let result = external_request_impl(
+        ApiRequestInput {
+            path: target_url.to_string(),
+            method: Some("GET".to_string()),
+            headers: None,
+            body: None,
+        },
+        target_url,
+    )
     .await
     .expect("function returns Ok with status=0 on network error");
 
@@ -401,12 +407,18 @@ async fn external_request_succeeds_against_mock_server() {
         .mount(&server)
         .await;
 
-    let result = external_request(ApiRequestInput {
-        path: format!("{}/ok", server.uri()),
-        method: Some("GET".to_string()),
-        headers: None,
-        body: None,
-    })
+    let target_url: url::Url = format!("{}/ok", server.uri())
+        .parse()
+        .expect("valid mock URL");
+    let result = external_request_impl(
+        ApiRequestInput {
+            path: target_url.to_string(),
+            method: Some("GET".to_string()),
+            headers: None,
+            body: None,
+        },
+        target_url,
+    )
     .await
     .expect("ok");
     assert_eq!(result.status, 200);
