@@ -123,13 +123,13 @@
 |---|---|---|---|
 | 设置 | worktree + `claude/gateway-ws-only` 分支(基线 origin/main 6eda0c1) | ✅ | Core 侧 `claude/p009-sse-deprecation` 同步开出 |
 | C1 | 文档重写为 WS-only | ✅ | 本文件 |
-| C2 | session.resume 重连恢复(P0-2 移植+语义修正) | ⬜ | cherry-pick 4d2b1a5+9c1aeed |
-| C3 | 默认直连 `/api/ws` + 退避对齐官方 | ⬜ | |
-| C4 | Rust WS 中继 + 自动回退 | ⬜ | 移植 v2 未提交草稿 |
-| C5 | 删 SSE 全部残留 | ⬜ | |
-| C6 | 测试重写 + 全量验证 | ⬜ | web 单测 / cargo test / clippy / typecheck |
-| Core | FORK_NOTES P-009 弃用标记 | ⬜ | 另开 PR |
-| 验证 | 运行时清单(见 §5) | ⏸ | 打包态需用户实测 |
+| C2 | session.resume 重连恢复(P0-2 移植+语义修正) | ✅ | cherry-pick 4d2b1a5+9c1aeed,重写门控注释,resume 300s 长超时 |
+| C3 | 默认直连 `/api/ws` + 退避对齐官方 | ✅ | pickTransport 删除;退避 15s 封顶+min(n,4);socketFactory 注入 |
+| C4 | Rust WS 中继 + 自动回退 | ✅ | ws_proxy.rs + gateway-relay-socket.ts + gateway-socket-path.ts(9 单测) |
+| C5 | 删 SSE 全部残留 | ✅ | -1837 行;环境诊断换真实 /api/ws 握手探测;CLAUDE.md/managed-runtime.md 同步 |
+| C6 | 测试重写 + 全量验证 | ✅ | typecheck 3 workspace ✓;web 533 + protocol 23 vitest ✓;cargo test 245+ ✓;clippy 0 警告;fmt ✓ |
+| Core | FORK_NOTES P-009 弃用标记 | ✅ | 分支 `claude/p009-sse-deprecation` 已推送,待开 PR |
+| 验证 | 运行时清单(见 §5) | ⏸ | 打包态需真机实测(macOS/Windows),进行中 |
 
 ---
 
