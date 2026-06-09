@@ -1333,16 +1333,17 @@ mod tests {
             .mount(server)
             .await;
 
+        // Compatibility now hinges on the fork's `/api/upload` route alone —
+        // `/api/ws` is upstream-native and never appears in openapi.json. An
+        // "incompatible" dashboard is one missing the fork route (e.g. a stock
+        // upstream build adopted by accident).
         let paths = if include_required_routes {
             serde_json::json!({
                 "/api/upload": {},
-                "/api/v2/events": {},
-                "/api/v2/rpc": {},
             })
         } else {
             serde_json::json!({
-                "/api/upload": {},
-                "/api/v2/events": {},
+                "/api/status": {},
             })
         };
         Mock::given(method("GET"))
