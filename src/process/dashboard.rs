@@ -420,6 +420,17 @@ pub fn terminate_owned_dashboard_tree(
         #[cfg(windows)]
         {
             force_kill_process_tree(pid);
+            // Wait for the process to fully exit after force-kill.
+            // Without this wait, the caller may re-probe the port before the
+            // killed process tree has released the TCP socket, leading to a
+            // false "still occupied by incompatible dashboard" error.
+            let deadline = Instant::now() + GRACEFUL_SHUTDOWN_TIMEOUT;
+            while Instant::now() < deadline {
+                if !pid_is_running(pid) {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(80));
+            }
         }
     }
 }
