@@ -1,5 +1,5 @@
 # Build hermes-agent-cn-desktop installers and attach them to a GitHub
-# Release. Triggers on tags matching `v*` (e.g. `v0.5.8`).
+# Release. Triggers on tags matching `v*` (e.g. `v0.6.0`).
 #
 # Desktop release build runs in parallel for Windows and macOS. Each job:
 #   1. Installs Node + pnpm + Rust toolchain
@@ -16,6 +16,10 @@
 #      pipeline.
 #   6. tauri-action uploads .exe / .dmg to the GitHub Release
 #      it creates on first run, or appends to an existing tag's release.
+#   7. Extra portable (unzip-and-run) zip artifacts are packaged from the same
+#      build output and uploaded alongside the installers: Windows collects
+#      exe + resources from the cargo target dir; macOS staples the already
+#      notarized .app and zips it with ditto. See docs/portable-mode.md.
 
 name: release-desktop
 
@@ -26,11 +30,11 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag name to associate the build with (e.g. v0.5.8)"
+        description: "Tag name to associate the build with (e.g. v0.6.0)"
         required: true
       bundled_runtime_tag:
         description: "Hermes-CN-Core runtime release tag to embed in desktop installers, or latest"
-        default: "runtime-v0.17.0-cn.5"
+        default: "runtime-v0.18.2-cn.1"
         required: false
 
 permissions:
@@ -86,7 +90,7 @@ jobs:
         shell: bash
         env:
           BUNDLED_RUNTIME_REPO: Eynzof/Hermes-CN-Core
-          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.17.0-cn.5' }}
+          BUNDLED_RUNTIME_TAG: ${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.1' }}
           RUNTIME_PLATFORM: ${{ matrix.runtime_platform }}
           RUNTIME_ARCH: ${{ matrix.runtime_arch }}
         run: |
@@ -144,7 +148,7 @@ jobs:
           args=(
             scripts/stage-bundled-runtime.mjs
             --repo "Eynzof/Hermes-CN-Core"
-            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.17.0-cn.5' }}"
+            --tag "${{ github.event.inputs.bundled_runtime_tag || 'runtime-v0.18.2-cn.1' }}"
             --platform "${{ matrix.runtime_platform }}"
             --arch "${{ matrix.runtime_arch }}"
           )
@@ -223,11 +227,25 @@ jobs:
             Windows 和 macOS 安装包同时内置 Hermes-CN-Core runtime
             ${{ steps.runtime_manifest.outputs.runtime_version }}，安装后可直接启动本地内核。
 
+            另附免安装（portable）压缩包：解压即用，全部数据保存在解压目录的
+            data 文件夹内，详见压缩包内 README-portable.txt。
+
             如需覆盖 runtime 更新源，可设置 HERMES_RUNTIME_UPDATE_* 环境变量。
           releaseDraft: false
           # Mark SemVer prerelease tags as prerelease on GitHub Releases.
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
           args: --target ${{ matrix.target }}
+
+      - name: Package + upload Windows portable zip
+        if: matrix.runtime_platform == 'win32'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          node scripts/package-portable-windows.mjs --target ${{ matrix.target }}
+          gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
 
       - name: Notarize, staple, verify, and reupload macOS DMG
         if: matrix.runtime_platform == 'darwin'
@@ -291,3 +309,39 @@ jobs:
             # final notarized + stapled DMG so the release asset is the one users download.
             gh release upload "$RELEASE_TAG" "$dmg" --clobber
           done
+
+      - name: Package + upload macOS portable zip
+        if: matrix.runtime_platform == 'darwin'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          app="target/${{ matrix.target }}/release/bundle/macos/Hermes Agent CN Desktop.app"
+
+          # Tauri's updater bundler compresses the .app into the .app.tar.gz
+          # updater artifact and then REMOVES the plain .app ("Cleaning …"),
+          # so by the time this step runs the bundle dir may only hold the
+          # tarball. Re-extract the .app from the final notarized DMG — the
+          # exact bits users download, covered by the notarization ticket.
+          if [ ! -d "$app" ]; then
+            dmgs=(target/${{ matrix.target }}/release/bundle/dmg/*.dmg)
+            mnt="$(mktemp -d)"
+            hdiutil attach "${dmgs[0]}" -mountpoint "$mnt" -nobrowse -quiet
+            mkdir -p "$(dirname "$app")"
+            ditto "$mnt/Hermes Agent CN Desktop.app" "$app"
+            hdiutil detach "$mnt" -quiet
+          fi
+
+          # The DMG notarization above produced a ticket covering the nested
+          # .app; staple the .app itself so the portable copy also validates
+          # offline. If Apple's ticket lookup ever fails here, the fallback is
+          # to notarize the portable zip separately:
+          #   ditto -c -k --keepParent "$app" app.zip && xcrun notarytool submit app.zip ...
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          spctl -a -vvv --type exec "$app"
+
+          node scripts/package-portable-macos.mjs --target ${{ matrix.target }}
+          gh release upload "$RELEASE_TAG" target/portable/*-portable.zip --clobber
