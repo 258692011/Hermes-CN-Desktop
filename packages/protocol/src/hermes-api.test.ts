@@ -10,11 +10,14 @@ import {
   CronRunsResponse,
   ElevenLabsVoicesResponse,
   FsListResponse,
+  MoaConfigResponse,
   ProviderModelsListResult,
   ProfileCreateResponse,
   ProfileSummary,
   SearchResponse,
   SessionsResponse,
+  SkillContentResponse,
+  SkillsResponse,
   SkillsHubSearchResponse,
   SessionCompressResult,
   SessionSummary,
@@ -60,6 +63,44 @@ describe("Audio API schemas", () => {
 
     expect(parsed.available).toBe(true);
     expect(parsed.voices[0]?.voice_id).toBe("voice-1");
+  });
+});
+
+describe("Skills API schemas", () => {
+  it("preserves the canonical Core provenance fields", () => {
+    const [bundled, agent] = SkillsResponse.parse([
+      {
+        name: "apple-reminders",
+        description: "Manage reminders.",
+        category: "apple",
+        enabled: true,
+        provenance: "bundled",
+        usage: 3,
+      },
+      {
+        name: "memory-eval-harness",
+        description: "Evaluate memory providers.",
+        category: "devops",
+        enabled: true,
+        provenance: "agent",
+        usage: 1,
+      },
+    ]);
+
+    expect(bundled?.provenance).toBe("bundled");
+    expect(bundled?.usage).toBe(3);
+    expect(agent?.provenance).toBe("agent");
+  });
+
+  it("parses skill content returned by the connected Core", () => {
+    const parsed = SkillContentResponse.parse({
+      name: "memory-eval-harness",
+      content: "# Memory Eval Harness\n",
+      path: "/remote/.hermes/skills/devops/memory-eval-harness/SKILL.md",
+    });
+
+    expect(parsed.path).toContain("memory-eval-harness/SKILL.md");
+    expect(parsed.content).toContain("Memory Eval Harness");
   });
 });
 
@@ -591,5 +632,55 @@ describe("ProviderModelsListResult schema", () => {
     });
     expect(parsed.ok).toBe(false);
     expect(parsed.error_kind).toBe("auth");
+  });
+});
+
+describe("MoaConfigResponse schema", () => {
+  // 后端 normalize_moa_config 的真实返回形状：命名 presets + 顶层 flattened
+  // 兼容视图。UI 只编辑 presets 视图，其余靠 passthrough 原样保留。
+  const normalized = {
+    default_preset: "default",
+    active_preset: "",
+    presets: {
+      default: {
+        enabled: true,
+        reference_models: [
+          { provider: "openai-codex", model: "gpt-5.5" },
+          { provider: "openrouter", model: "deepseek/deepseek-v4-pro" },
+        ],
+        aggregator: { provider: "openrouter", model: "anthropic/claude-opus-4.8" },
+        reference_temperature: null,
+        aggregator_temperature: null,
+        max_tokens: 4096,
+        reference_max_tokens: 600,
+        fanout: "per_iteration",
+      },
+    },
+    reference_models: [{ provider: "openai-codex", model: "gpt-5.5" }],
+    aggregator: { provider: "openrouter", model: "anthropic/claude-opus-4.8" },
+    max_tokens: 4096,
+    enabled: true,
+  };
+
+  it("parses the backend-normalized shape and keeps UI-unedited fields via passthrough", () => {
+    const parsed = MoaConfigResponse.parse(normalized);
+    expect(parsed.default_preset).toBe("default");
+    expect(parsed.presets.default.reference_models).toHaveLength(2);
+    expect(parsed.presets.default.aggregator.model).toBe("anthropic/claude-opus-4.8");
+    // passthrough：编辑器不渲染这些字段，但读取/回写时不能弄丢。
+    expect(parsed.presets.default.reference_max_tokens).toBe(600);
+    expect(parsed.presets.default.fanout).toBe("per_iteration");
+    expect(parsed.reference_models).toEqual(normalized.reference_models);
+  });
+
+  it("defaults a missing active_preset to empty string", () => {
+    const { active_preset: _omit, ...withoutActive } = normalized;
+    const parsed = MoaConfigResponse.parse(withoutActive);
+    expect(parsed.active_preset).toBe("");
+  });
+
+  it("parses the PUT echo carrying an ok flag", () => {
+    const parsed = MoaConfigResponse.parse({ ok: true, ...normalized });
+    expect(parsed.presets.default.max_tokens).toBe(4096);
   });
 });

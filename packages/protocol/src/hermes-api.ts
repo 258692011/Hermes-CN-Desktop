@@ -470,6 +470,41 @@ export const ModelInfo = z.object({
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
+// ── MoA / Mixture of Agents (/api/model/moa) ──────────────────────────
+// 后端事实来源：Core `hermes_cli/moa_config.py`（normalize_moa_config）与
+// `hermes_cli/web_server.py`（GET/PUT /api/model/moa，MoaConfigPayload）。
+
+export const MoaModelSlot = z.object({
+  provider: z.string(),
+  model: z.string(),
+});
+export type MoaModelSlot = z.infer<typeof MoaModelSlot>;
+
+// passthrough 保留后端归一化返回里 UI 不编辑的字段（reference_max_tokens、
+// fanout 等），避免读到什么丢什么。
+export const MoaPresetConfig = z
+  .object({
+    enabled: z.boolean(),
+    reference_models: z.array(MoaModelSlot),
+    aggregator: MoaModelSlot,
+    reference_temperature: z.number().nullable().optional(),
+    aggregator_temperature: z.number().nullable().optional(),
+    max_tokens: z.number(),
+  })
+  .passthrough();
+export type MoaPresetConfig = z.infer<typeof MoaPresetConfig>;
+
+// GET/PUT 共用的归一化配置形状。顶层的 flattened 字段（default preset 的
+// 兼容视图）由 passthrough 透传，UI 只读写 presets 命名视图。
+export const MoaConfigResponse = z
+  .object({
+    default_preset: z.string(),
+    active_preset: z.string().optional().default(""),
+    presets: z.record(z.string(), MoaPresetConfig),
+  })
+  .passthrough();
+export type MoaConfigResponse = z.infer<typeof MoaConfigResponse>;
+
 // ── Environment Variables (/api/env) ──────────────────────────────────
 
 export const EnvVarInfo = z.object({
@@ -505,6 +540,10 @@ export const SkillInfo = z.object({
   description: z.string(),
   category: z.string().nullable(),
   enabled: z.boolean(),
+  provenance: z.enum(["bundled", "hub", "agent"]).optional(),
+  usage: z.number().int().nonnegative().optional(),
+  // Legacy CN Desktop fields. Current Core reports provenance and exposes
+  // the authenticated /api/skills/content endpoint for source + markdown.
   origin: z.enum(["builtin", "user", "external"]).optional(),
   source_path: z.string().optional(),
   skill_file: z.string().optional(),
@@ -513,6 +552,13 @@ export type SkillInfo = z.infer<typeof SkillInfo>;
 
 export const SkillsResponse = z.array(SkillInfo);
 export type SkillsResponse = z.infer<typeof SkillsResponse>;
+
+export const SkillContentResponse = z.object({
+  name: z.string(),
+  content: z.string(),
+  path: z.string(),
+});
+export type SkillContentResponse = z.infer<typeof SkillContentResponse>;
 
 // 技能 hub 搜索（GET /api/skills/hub/search?q=&source=&limit=&profile=）。
 // profile builder 的「从 hub 添加」用它；identifier 是安装时的唯一键。

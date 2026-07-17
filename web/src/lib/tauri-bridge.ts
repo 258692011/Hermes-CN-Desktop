@@ -32,7 +32,10 @@ import type {
   ImOnboardingStateInput,
   ImOnboardingStateResult,
   ProbeConnectionResult,
+  OauthLoginResult,
   RuntimeInfo,
+  RuntimeControlResult,
+  GuideState,
   RuntimeInstallUpdateResult,
   RuntimeUpdateCheckResult,
   SetYoloModeInput,
@@ -51,7 +54,6 @@ import type {
   FilePreview,
   PreviewFileChangedPayload,
   ReadWorkspaceFileInput,
-  SkillMarkdownResult,
   ExportDebugBundleInput,
   ExportDebugBundleResult,
   ExternalTerminalResult,
@@ -376,8 +378,57 @@ const tauriBridge = {
     return invokeCommand("test_connection_config", { input });
   },
 
+  async getDesktopControlState(): Promise<RuntimeControlResult> {
+    return invokeCommand("get_desktop_control_state");
+  },
+
+  async setGuideState(guideState: GuideState): Promise<RuntimeControlResult> {
+    return invokeCommand("set_guide_state", { input: { guideState } });
+  },
+
+  async installManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_install");
+  },
+
+  async startManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_start");
+  },
+
+  async stopManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_stop");
+  },
+
+  async uninstallManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_uninstall");
+  },
+
+  async reinstallManagedRuntime(): Promise<RuntimeControlResult> {
+    return invokeCommand("managed_runtime_reinstall");
+  },
+
   async probeConnectionConfig(remoteUrl: string): Promise<ProbeConnectionResult> {
     return invokeCommand("probe_connection_config", { remoteUrl });
+  },
+
+  async connectionOauthLogin(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_oauth_login", { input: { remoteUrl } });
+  },
+
+  async connectionPasswordLogin(input: {
+    remoteUrl: string;
+    provider: string;
+    username: string;
+    password: string;
+  }): Promise<OauthLoginResult> {
+    return invokeCommand("connection_password_login", { input });
+  },
+
+  async connectionAuthMe(remoteUrl: string): Promise<OauthLoginResult> {
+    return invokeCommand("connection_auth_me", { input: { remoteUrl } });
+  },
+
+  async connectionOauthLogout(remoteUrl: string): Promise<void> {
+    return invokeCommand("connection_oauth_logout", { input: { remoteUrl } });
   },
 
 
@@ -411,10 +462,6 @@ const tauriBridge = {
 
   async imOnboardingApply(input: ImOnboardingApplyInput): Promise<ImOnboardingApplyResult> {
     return invokeCommand("im_onboarding_apply", { input });
-  },
-
-  async readSkillMarkdown(input: { name: string }): Promise<SkillMarkdownResult> {
-    return invokeCommand("read_skill_markdown", { input });
   },
 
   async readMemory() {
@@ -924,6 +971,11 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken?: string;
     currentProfile: string;
     connectionMode?: "managed" | "local" | "remote";
+    portable?: boolean;
+    backendReady?: boolean;
+    guideState?: GuideState;
+    managedRuntimeDesiredState?: import("@hermes/protocol").ManagedRuntimeDesiredState;
+    managedRuntimeLifecycleState?: import("@hermes/protocol").ManagedRuntimeLifecycleState;
   }>("get_runtime_config");
 
   // Dev mode: WebView loads from Vite dev server (http://localhost:9545).
@@ -945,9 +997,9 @@ export async function installTauriBridge(): Promise<void> {
   // the populated apiBaseUrl/sessionToken. In Vite dev we still avoid writing
   // apiBaseUrl into window.__HERMES_RUNTIME__ later, but waiting here prevents
   // the React app from racing the managed dashboard startup.
-  if (!config.apiBaseUrl) {
+  if (!config.apiBaseUrl && config.backendReady !== false) {
     const result = await waitForBootstrap(
-      "正在启动Hermes Agent内核...",
+      "正在唤醒Hermes...",
       () => invokeCommand("get_runtime_config"),
       () => invokeCommand("runtime_info"),
     );
@@ -976,6 +1028,11 @@ export async function installTauriBridge(): Promise<void> {
     sessionToken: config.sessionToken,
     currentProfile: config.currentProfile,
     connectionMode,
+    portable: config.portable ?? false,
+    backendReady: config.backendReady ?? Boolean(config.apiBaseUrl),
+    guideState: config.guideState ?? "completed",
+    managedRuntimeDesiredState: config.managedRuntimeDesiredState ?? "running",
+    managedRuntimeLifecycleState: config.managedRuntimeLifecycleState ?? "running",
   };
 
   (window as any).hermesDesktop = tauriBridge;
