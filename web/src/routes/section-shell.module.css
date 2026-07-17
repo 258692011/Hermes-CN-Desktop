@@ -22,7 +22,11 @@
   padding: 20px 24px 48px;
 }
 
-.body[data-with-rail="true"] .scroll {
+.scroll[data-layout="frame"] {
+  padding: 0;
+}
+
+.body[data-with-rail="true"] .scroll:not([data-layout="frame"]) {
   padding-right: 20px;
 }
 
@@ -41,7 +45,7 @@
 }
 
 @media (max-width: 1120px) {
-  .body[data-with-rail="true"] .scroll {
+  .body[data-with-rail="true"] .scroll:not([data-layout="frame"]) {
     padding-right: 16px;
   }
 }
@@ -52,7 +56,7 @@
     overflow: hidden;
   }
 
-  .body[data-with-rail="true"] .scroll {
+  .body[data-with-rail="true"] .scroll:not([data-layout="frame"]) {
     flex: 1;
     min-height: 0;
     overflow-y: auto;

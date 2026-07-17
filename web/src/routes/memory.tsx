@@ -10,7 +10,7 @@ import {
   useUpdateMemoryEntry,
   type MemoryProviderOption,
 } from "@/hooks/use-memory";
-import { Button } from "@hermes/shared-ui";
+import { Button, PageGrid } from "@hermes/shared-ui";
 import { memoryPageStats, formatMemoryPageStat } from "@/lib/memory-page-stats";
 import { SectionShell } from "./section-shell";
 import { SettingsHero } from "./settings-hero";
@@ -164,7 +164,7 @@ export function MemoryRoute() {
   );
 
   return (
-    <SectionShell title="记忆" sub="MEMORY.md / USER.md" right={right}>
+    <SectionShell title="记忆" sub="MEMORY.md / USER.md" right={right} contentSize="wide">
       <SettingsHero
         ok={!memoryQuery.isError}
         icon={<Brain size={24} />}
@@ -186,19 +186,19 @@ export function MemoryRoute() {
         <div className={s.emptyState}>加载记忆中…</div>
       ) : (
         <div className={s.memoryPage}>
-          <div className={s.statsGrid}>
+          <PageGrid className={s.statsGrid}>
             {stats.map((item) => (
               <div key={item.label} className={s.statCard}>
                 <span>{formatMemoryPageStat(item.value)}</span>
                 <small>{item.label}</small>
               </div>
             ))}
-          </div>
+          </PageGrid>
 
-          <div className={s.capacityGrid}>
+          <PageGrid className={s.capacityGrid}>
             <CapacityBar label="记忆" used={data.memory.charCount} limit={data.memory.charLimit} />
             <CapacityBar label="用户画像" used={data.user.charCount} limit={data.user.charLimit} />
-          </div>
+          </PageGrid>
 
           <div className={s.tabs}>
             <button type="button" data-active={tab === "entries" ? "true" : undefined} onClick={() => setTab("entries")}>

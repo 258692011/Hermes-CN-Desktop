@@ -15,6 +15,7 @@ import { PanelHero } from "@/components/panel/panel-hero";
 import { QuickStart } from "@/components/panel/quick-start";
 import { RecentTable } from "@/components/panel/recent-table";
 import { TaskCard } from "@/components/panel/task-card";
+import { PageFrame, PageGrid } from "@hermes/shared-ui";
 import type { SessionSummary } from "@hermes/protocol";
 import s from "./panel.module.css";
 
@@ -35,17 +36,19 @@ interface SectionProps {
 function Section({ num, tag, title, meta, children }: SectionProps) {
   return (
     <section className={s.section}>
-      <div className={s.sectionNum}>§ {num}</div>
-      <div className={s.sectionBody}>
-        <div className={s.sectionHead}>
-          <div className={s.sectionLh}>
-            <span className={s.sectionTag}>[ {tag} ]</span>
-            <h2 className={s.sectionTitle}>{title}</h2>
+      <PageGrid className={s.sectionGrid}>
+        <div className={s.sectionNum}>§ {num}</div>
+        <div className={s.sectionBody}>
+          <div className={s.sectionHead}>
+            <div className={s.sectionLh}>
+              <span className={s.sectionTag}>[ {tag} ]</span>
+              <h2 className={s.sectionTitle}>{title}</h2>
+            </div>
+            {meta && <div className={s.sectionMeta}>{meta}</div>}
           </div>
-          {meta && <div className={s.sectionMeta}>{meta}</div>}
+          {children}
         </div>
-        {children}
-      </div>
+      </PageGrid>
     </section>
   );
 }
@@ -104,7 +107,7 @@ export function PanelRoute() {
 
   return (
     <div className={s.pageWrap}>
-      <div className={s.pageContent}>
+      <PageFrame size="wide" className={s.pageFrame} frameClassName={s.pageContent}>
         <PanelHero
           activeCount={active.length}
           completedToday={todayStats.completed}
@@ -158,7 +161,7 @@ export function PanelRoute() {
         >
           <QuickStart />
         </Section>
-      </div>
+      </PageFrame>
     </div>
   );
 }

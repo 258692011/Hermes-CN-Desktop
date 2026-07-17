@@ -1,0 +1,16 @@
+/* Hermes Design Tokens — Page layout and responsive grid */
+
+:root {
+  --h-page-content-readable: 760px;
+  --h-page-content-wide: 1120px;
+
+  --h-page-gutter: var(--h-space-6);
+  --h-page-gutter-medium: var(--h-space-5);
+  --h-page-gutter-compact: var(--h-space-4);
+  --h-page-padding-block-start: var(--h-space-5);
+  --h-page-padding-block-end: var(--h-space-12);
+
+  --h-grid-column-gap: var(--h-space-4);
+  --h-grid-column-gap-compact: var(--h-space-3);
+  --h-grid-row-gap: var(--h-space-6);
+}
