@@ -1435,13 +1435,12 @@ pub async fn check_runtime_update() -> RuntimeUpdateCheckResult {
                 let (update_available, downgrade_blocked) = match current.as_ref() {
                     None => (true, false),
                     Some(c) if c.runtime_version == manifest.runtime_version => (false, false),
-                    Some(c) => {
-                        if is_version_downgrade(&manifest.runtime_version, &c.runtime_version) {
-                            (false, true)
-                        } else {
-                            (true, false)
-                        }
+                    Some(c)
+                        if is_version_downgrade(&manifest.runtime_version, &c.runtime_version) =>
+                    {
+                        (false, true)
                     }
+                    Some(_) => (true, false),
                 };
                 let required_app_version = blocking_min_app_version(&manifest);
                 RuntimeUpdateCheckResult {
