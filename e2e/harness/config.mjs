@@ -18,6 +18,8 @@ export const VENV_PY =
 export const RUNTIME_DIR = resolve(E2E_DIR, ".runtime");
 export const HERMES_HOME = resolve(RUNTIME_DIR, "hermes-home");
 export const UPLOAD_DIR = resolve(RUNTIME_DIR, "uploads");
+export const PLUGIN_SOURCE_DIR = resolve(RUNTIME_DIR, "e2e-installed-plugin");
+export const PLUGIN_IMPORT_MARKER = resolve(RUNTIME_DIR, "plugin-imported.txt");
 // Stub SPA dist so the dashboard serves *something* at `/` (we use the desktop's
 // own Vite frontend; Core's UI is irrelevant here). HERMES_WEB_DIST overrides
 // the built-in web_dist path, letting us pass --skip-build without a real build.
@@ -55,6 +57,9 @@ export function configYaml() {
     "  user_profile_enabled: false",
     "compression:",
     "  enabled: false",
+    "plugins:",
+    "  enabled: []",
+    "  disabled: []",
     "",
   ].join("\n");
 }
@@ -66,6 +71,7 @@ export function coreEnv() {
     HERMES_HOME,
     HERMES_WEB_DIST: WEB_DIST,
     HERMES_DASHBOARD_SESSION_TOKEN: DASHBOARD_TOKEN,
+    E2E_PLUGIN_IMPORT_MARKER: PLUGIN_IMPORT_MARKER,
     // Belt-and-suspenders: config.base_url already wins, but these guarantee the
     // OpenAI-compatible client targets the fake server even if provider
     // resolution is surprising.
